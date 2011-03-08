@@ -1,0 +1,19 @@
+Lua Easy Mock -- LeMock
+Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+See terms in file COPYRIGHT, or at http://lemock.luaforge.net
+@
+
+<<unit/userguide.lua>>=
+	<<Lua file blurb>>
+	
+	require 'lunit'
+	module( 'unit.userguide', lunit.testcase, package.seeall )
+	
+	<<Unit test for Userguide Example actions>>
+	<<Unit test for Userguide Example anyargs>>
+	<<Unit test for Userguide Example close>>
+	<<Unit test for Userguide Example depend>>
+	<<Unit test for Userguide Example overloading>>
+	<<Unit test for Userguide Example returns & error>>
+	<<Unit test for Userguide Example simple>>
+	<<Unit test for Userguide Example times>>

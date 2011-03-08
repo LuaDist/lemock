@@ -1,0 +1,632 @@
+Lua Easy Mock -- LeMock
+Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+See terms in file COPYRIGHT, or at http://lemock.luaforge.net
+@
+
+Action Controll
+###############
+
+Times
+=====
+
+Some Actions might need to be replayed an arbitrary number of times,
+although they should be replayed at least once. Others might be optional
+and not need to be replayed at all.
+
+The [[min_replays]] and [[max_replays]] properties of the Action implements
+this kind of control. The Action is satisfied if it is replayed at least
+[[min_replay]] times, but it will still continue to match on lookups until
+it has been replayed [[max_replays]] times.
+
+Common values for min and max:
+
++--------+-------------------+
+| 1, 1   | exactly once      |
++--------+-------------------+
+| 1, inf | at least once     |
++--------+-------------------+
+| 0, 1   | no more than once |
++--------+-------------------+
+| 0, inf | any times         |
++--------+-------------------+
+
+It is no harm to change the times more than once; they will simply be
+overwritten. Suppressing multiple changes would require an extra control
+property.
+
+<<Unit test for module mock; times>>=
+	function times_test ()
+		local tmp = m.foo ;mc:returns( 2 ):times( 2, 3 )
+		mc:replay()
+		-- 1
+		local tmp = m.foo
+		local ok, err = pcall( function() mc:verify() end )
+		assert_false( ok, "verified unsatisfied action" )
+		assert_match( "Wrong replay count 1 ", err )
+		-- 2
+		local tmp = m.foo
+		mc:verify()
+		-- 3
+		local tmp = m.foo
+		mc:verify()
+		-- 4
+		local ok, err = pcall( function() local tmp = m.foo end )
+		assert_false( ok, "replaied finished action" )
+		assert_match( "Unexpected action index foo", err )
+	end
+	function times_called_twice_test ()
+		m.foo = 1 ;mc:times( 0, math.huge ):times( 1 )
+	end
+	function times_in_replay_mode_fails_test ()
+		mc:replay()
+		local ok, err = pcall( function() mc:times(1) end )
+		assert_false( ok, "changed times in replay mode" )
+		assert_match( "Can not set times in replay mode.", err )
+	end
+	function unrealistic_times_fails_with_message_test ()
+		m.a = 'a'
+		local ok, err = pcall( function() mc:times(0) end )
+		assert_false( ok, "accepted unrealistic time arguments" )
+		assert_match( "Unrealistic time arguments", err )
+	end
+
+<<Class Controller method times>>=
+	function Controller:times (min, max)
+		if not self.is_recording then
+			error( "Can not set times in replay mode.", 0 )
+		end
+		self:get_last_action():set_times( min, max )
+		return self -- for chaining
+	end
+	-- convenience functions
+	function Controller:anytimes()    return self:times( 0, math.huge ) end
+	function Controller:atleastonce() return self:times( 1, math.huge ) end
+@
+
+Action set_times
+----------------
+
+<<Unit test for class Action.generic method set_times>>=
+	function set_and_get_times_test ()
+	end
+	function unrealistic_times_fails_test ()
+		local ps = { {'foo'}, {8,'bar'}, {-1}, {3,2}, {1/0}, {0/0}, {0,0} }
+		for _, p in ipairs( ps ) do
+			local ok, err = pcall( function() a:set_times( unpack(p) ) end )
+			assert_false( ok, "unrealistic times "..table.concat(p,", ") )
+			assert_match( "Unrealistic time arguments ", err )
+		end
+	end
+
+<<Class Action.generic method set_times>>=
+	function Action.generic:set_times (a, b)
+		min = a or 1
+		max = b or min
+		min, max = tonumber(min), tonumber(max)
+		if (not min) or (not max) or (min >= math.huge)
+		             or (min ~= min) or (max ~= max) -- NaN
+		             or (min < 0) or (max <= 0) or (min > max) then
+			error( sfmt( "Unrealistic time arguments (%s, %s)"
+			           , qtostring( min )
+			           , qtostring( max )
+			           )
+			     , 0
+			     )
+		end
+		self.min_replays = min
+		self.max_replays = max
+	end
+@
+
+Label
+=====
+
+Labels help establishing relationships between Actions. The labels are
+actually implemented as tags, in a many-to-many relationship, so that one
+Action can have multiple labels, and the same label can be assigned to
+multiple Actions.
+
+<<Unit test for module mock; label>>=
+	function label_in_replay_mode_fails_test ()
+		mc:replay()
+		local ok, err = pcall( function() mc:label( 'foo' ) end )
+		assert_false( ok, "set label in replay mode" )
+		assert_match( "Can not add labels in replay mode", err )
+	end
+	function label_on_empty_actionlist_fails_test ()
+		local ok, err = pcall( function() mc:label( 'bar' ) end )
+		assert_false( ok, "set label with empty action list" )
+		assert_match( "No action is recorded yet", err )
+	end
+
+<<Unit test for class Controller method label>>=
+	function label_test ()
+		mc:add_action( A:new() )
+		mc:label( 'a', 'b' ):label( 'c', 'b' )
+		local a = mc:get_last_action()
+		local seen = {}
+		for l in a:blocks() do
+			seen[l] = true
+		end
+		assert_true( seen['a'] )
+		assert_true( seen['b'] )
+		assert_true( seen['c'] )
+		assert_nil(  seen['d'] )
+	end
+
+<<Class Controller method label>>=
+	function Controller:label (...)
+	if not self.is_recording then
+		error( "Can not add labels in replay mode.", 2 )
+	end
+	local action = self:get_last_action()
+	for _, label in ipairs{ ... } do
+		action:add_label( label )
+	end
+	return self -- for chaining
+	end
+@
+
+Action add_label, has_label, and blocks
+---------------------------------------
+
+There is no method for iterating through the labels, but there is a
+[[blocks]] method, that iterates through the labels if the Action is not
+satisfied. This method is used for updating the dependency information.
+
+<<Unit test for class Action.generic label methods>>=
+	function label_test ()
+		local ls = { 1/0, 0, false, {}, a, "foo", true }
+		for i = 1, #ls do
+			assert_false( a:has_label( ls[i] ))
+		end
+		for i = 1, #ls do
+			a:add_label( ls[i] )
+			for j = 1 , #ls do
+				if j <= i then
+					assert_true( a:has_label( ls[j] ))
+				else
+					assert_false( a:has_label( ls[j] ))
+				end
+			end
+		end
+	end
+	function add_label_twice_test ()
+		local l = 'foo'
+		a:add_label( l )
+		a:add_label( l )
+		local cnt = 0
+		for x in a:blocks() do
+			assert_equal( l, x )
+			cnt = cnt + 1
+		end
+		assert_equal( 1, cnt )
+	end
+
+<<Class Action.generic method add_label>>=
+	function Action.generic:add_label (label)
+		add_to_set( self, 'labellist', label )
+	end
+
+<<Class Action.generic method has_label>>=
+	function Action.generic:has_label (l)
+		for x in elements_of_set( self, 'labellist' ) do
+			if x == l then return true end
+		end
+		return false
+	end
+
+<<Class Action.generic method blocks>>=
+	function Action.generic:blocks ()
+		if self:is_satisfied() then
+			return function () end
+		end
+		return elements_of_set( self, 'labellist' )
+	end
+@
+
+Depend
+======
+
+A typical usage case is expected to have some tenths actions, so there is
+no need to optimize dependency calculations for speed. The dependencies are
+stored as lists of labels in the action objects. When an action changes
+states the Controller's [[update_dependency]] method examines the action
+list. If an action is not satisfied all its labels are collected in a
+blocking list, and finally all actions that depend on a label in the
+blocking list are blocked by setting the [[is_blocked]] property to true.
+
+<<Unit test for module mock; depend>>=
+	function depend_fulfilled_test ()
+		m.foo = 1 ;mc:label 'A'
+		m.bar = 2 ;mc:depend 'A'
+		mc:replay()
+		m.foo = 1
+		m.bar = 2
+		mc:verify()
+	end
+	function depend_unfulfilled_fails_test ()
+		m.foo = 1 ;mc:label 'A'
+		m.bar = 2 ;mc:depend 'A'
+		mc:replay()
+		local ok, err = pcall( function() m.bar = 2 end )
+		assert_false( ok, "replayed blocked action" )
+		assert_match( "Unexpected action newindex", err )
+	end
+	function depend_fulfilled_any_order_test ()
+		local tmp
+		m.a = 1 ;mc:label 'A'
+		tmp = m.b ;mc:returns(2):depend 'A'
+		tmp = m.b ;mc:returns(3)
+		mc:replay()
+		assert_equal( 3, m.b, "replayed wrong b" )
+		m.a = 1
+		assert_equal( 2, m.b, "replayed wrong b" )
+		mc:verify()
+	end
+	function depend_serial_blocks_test ()
+		local tmp
+		tmp = m:a() ;mc:label 'a'
+		tmp = m:c() ;mc:label 'c' :depend 'b'
+		tmp = m:b() ;mc:label 'b' :depend 'a'
+		mc:replay()
+		local ok, err = pcall( function() tmp = m:b() end )
+		assert_false( ok, "replayed blocked action" )
+		assert_match( "Unexpected action", err )
+		local ok, err = pcall( function() tmp = m:c() end )
+		assert_false( ok, "replayed blocked action" )
+		assert_match( "Unexpected action", err )
+		m:a()
+		local ok, err = pcall( function() tmp = m:c() end )
+		assert_false( ok, "replayed blocked action" )
+		assert_match( "Unexpected action", err )
+		m:b()
+		m:c()
+		mc:verify()
+	end
+	function depend_on_many_labels_test ()
+		local tmp
+		tmp = m:b() ;mc:label 'b'
+		tmp = m:c() ;mc:label 'c' :depend( 'a', 'b' )
+		tmp = m:a() ;mc:label 'a'
+		mc:replay()
+		local ok, err = pcall( function() tmp = m:c() end )
+		assert_false( ok, "replayed blocked action" )
+		assert_match( "Unexpected action", err )
+		m:a()
+		local ok, err = pcall( function() tmp = m:c() end )
+		assert_false( ok, "replayed blocked action" )
+		assert_match( "Unexpected action", err )
+		m:b()
+		m:c()
+		mc:verify()
+	end
+	function depend_on_many_labels_test2_test ()
+		-- swap order, in case whole list is not checked
+		local tmp
+		tmp = m:b() ;mc:label 'b'
+		tmp = m:c() ;mc:label 'c' :depend( 'b', 'a' )
+		tmp = m:a() ;mc:label 'a'
+		mc:replay()
+		local ok, err = pcall( function() tmp = m:c() end )
+		assert_false( ok, "replayed blocked action" )
+		assert_match( "Unexpected action", err )
+		m:a()
+		local ok, err = pcall( function() tmp = m:c() end )
+		assert_false( ok, "replayed blocked action" )
+		assert_match( "Unexpected action", err )
+		m:b()
+		m:c()
+		mc:verify()
+	end
+	function depend_on_many_bloskers_with_same_label_test ()
+		tmp = m:c() ;mc:label 'c' :depend 'b'
+		tmp = m:a() ;mc:label 'b'
+		tmp = m:b() ;mc:label 'b'
+		mc:replay()
+		local ok, err = pcall( function() tmp = m:c() end )
+		assert_false( ok, "replayed blocked action" )
+		assert_match( "Unexpected action", err )
+		m:a()
+		local ok, err = pcall( function() tmp = m:c() end )
+		assert_false( ok, "replayed blocked action" )
+		assert_match( "Unexpected action", err )
+		m:b()
+		m:c()
+		mc:verify()
+	end
+@
+The algorithm implies that "unknown" labels are ignored, i.e. unless a
+depended upon label is explicitly blocked by an unsatisfied action with
+that a label, the dependency is considered fulfilled.
+
+<<Unit test for module mock; depend>>=
+	function depend_ignors_unknown_label_test ()
+		m.foo = 1 ;mc:label 'A'
+		m.bar = 2 ;mc:depend 'B'
+		mc:replay()
+		m.foo = 1
+		m.bar = 2
+		mc:verify()
+	end
+@
+Cycles constitute a problem. A dependency cycle of actions will block
+itself out and can not be replayed. Although this does not necessarily mean
+replay will fail -- all the actions might for example have [[min_replays]]
+set to zero, in which case they are automatically satisfied -- it is most
+likely a user error to introduce a dependency cycle, and a helpful error
+message is in place.
+
+<<Unit test for module mock; depend>>=
+	function depend_detect_cycle_test ()
+		local ok, err = pcall( function()
+			m.foo = 1 ;mc:label 'A' :depend 'B'
+			m.bar = 2 ;mc:label 'B' :depend 'A'
+			mc:replay()
+			m.foo = 1
+		end )
+		assert_false( ok, "replayed cyclically blocked action" )
+		assert_match( "dependency cycle", err )
+	end
+
+<<Unit test for module mock; depend>>=
+	function depend_chaining_test ()
+		m.a = 1 ;mc:label 'A'
+		m.b = 1 ;mc:label 'B'
+		m.c = 1 ;mc:depend('A'):depend('B')
+	end
+	function depend_in_replay_mode_fails_test ()
+		mc:replay()
+		local ok, err = pcall( function() mc:depend( 'foo' ) end )
+		assert_false( ok, "set dependency in replay mode" )
+		assert_match( "Can not add dependency in replay mode", err )
+	end
+	function depend_on_empty_actionlist_fails_test ()
+		local ok, err = pcall( function() mc:depend( 'bar' ) end )
+		assert_false( ok, "set dependency with empty action list" )
+		assert_match( "No action is recorded yet", err )
+	end
+	function depend_reports_expected_actions_on_faliure_test ()
+		local tmp
+		tmp = m.foo ;mc:depend 'B'
+		tmp = m.bar ;mc:label 'B'
+		mc:replay()
+		local ok, err = pcall( function() tmp = m.foo end )
+		assert_false( ok, "replayed blocked action" )
+		assert_match( "expected:.*index bar", err )
+		assert_not_match( "expected:.*index foo", err )
+		tmp = m.bar
+		local ok, err = pcall( function() tmp = m.bar end )
+		assert_false( ok, "expected:.*replayed blocked action" )
+		assert_not_match( "expected:.*index bar", err )
+		assert_match( "index foo", err )
+	end
+@
+
+Addind dependencies
+-------------------
+
+<<Class Controller method depend>>=
+	function Controller:depend (...)
+		if not self.is_recording then
+			error( "Can not add dependency in replay mode.", 2 )
+		end
+		local action = self:get_last_action()
+		for _, dependency in ipairs{ ... } do
+			action:add_depend( dependency )
+		end
+		return self -- for chaining
+	end
+
+<<Unit test for Class Action.generic method add_depend and depends>>=
+	function add_depend_test ()
+		local ls = { 0, 'foo', 1/0, a, {} }
+		local seen = {}
+		for _, l in ipairs( ls ) do
+			seen[l] = 0
+			a:add_depend( l )
+		end
+		for l in a:depends() do
+			seen[l] = seen[l] + 1
+		end
+		for _, l in ipairs( ls ) do
+			assert_equal( 1, seen[l], "Mismatch for "..qtostring(l) )
+		end
+	end
+	function dependencies_dont_iterate_on_empty_list_test ()
+		for _ in a:depends() do
+			fail( "unexpected dependency" )
+		end
+	end
+
+<<Class Action.generic method add_depend>>=
+	function Action.generic:add_depend (d)
+		add_to_set( self, 'dependlist', d )
+	end
+
+<<Class Action.generic method depends>>=
+	function Action.generic:depends ()
+		return elements_of_set( self, 'dependlist' )
+	end
+@
+
+Updating dependencies and detecting cycles
+------------------------------------------
+
+<<Class Controller method update_dependencies>>=
+	function Controller:update_dependencies ()
+		local blocked = {}
+		for action in self:actions() do
+			for label in action:blocks() do
+				blocked[label] = true
+			end
+		end
+		local function is_blocked (action)
+			for label in action:depends() do
+				if blocked[label] then return true end
+			end
+			return false
+		end
+		for action in self:actions() do
+			action.is_blocked = is_blocked( action )
+		end
+	end
+@
+A cycle is detected by a complete depth-first search of the dependency
+tree, examining for each step if new labels are already present somewhere
+in the path to the new node. The design with multiple labels and multiple
+dependencies makes the algorithm a bit extra complicated, because each node
+in the tree is a set of labels.
+
+A *node* is represented as a table, where labels are stored as array
+elements, and the [[prev]] property references the previous node in the
+*path*.
+
+The use of temporary "linked lists" in this function generates a lot of
+garbage for the garbage collector, but it is only run once.
+
+<<Class Controller method assert_no_dependency_cycles>>=
+	function Controller:assert_no_dependency_cycles ()
+		local function is_in_path (label, path)
+			if not path then return false end -- is root
+			for _, l in ipairs( path ) do
+				if l == label then return true end
+			end
+			if path.prev then return is_in_path( label, path.prev ) end
+			return false
+		end
+		local function can_block (action, node)
+			for _, label in ipairs( node ) do
+				if action:has_label( label ) then return true end
+			end
+			return false
+		end
+		local function step (action, path)
+			local new_head
+			for label in action:depends() do
+				if is_in_path( label, path ) then
+					error( "Detected dependency cycle", 0 )
+				end
+				-- only create table if needed to reduce garbage
+				if not new_head then new_head = { prev=path } end
+				new_head[#new_head+1] = label
+			end
+			return new_head
+		end
+		local function search_depth_first (path)
+			for action in self:actions() do
+				if can_block( action, path ) then
+					local new_head = step( action, path )
+					if new_head then
+						search_depth_first( new_head )
+					end
+				end
+			end
+		end
+		for action in self:actions() do
+			local root = step( action, nil )
+			if root then search_depth_first( root ) end
+		end
+	end
+@
+
+Close
+=====
+
+<<Unit test for module mock; close>>=
+	function close_test ()
+		local t
+		t = m.foo ;mc:times(0,1/0):returns( 1 ) :label(1)
+		t = m.foo ;mc:times(0,1/0):returns( 2 ) :label(2)
+		t = m.foo ;mc:times(0,1/0):returns( 3 )
+		m.bar(1) ;mc:close(1)
+		m.bar(2) ;mc:close(2)
+		mc:replay()
+		m.bar(1)
+		assert_equal( 2, m.foo )
+		assert_equal( 2, m.foo )
+		assert_equal( 2, m.foo )
+		m.bar(2)
+		assert_equal( 3, m.foo )
+		mc:verify()
+	end
+	function close_unsatisfied_action_fails_test ()
+		m.a = 1 ;mc:label(1)
+		m.b = 2 ;mc:close(1)
+		mc:replay()
+		local ok, err = pcall( function() m.b = 2 end )
+		assert_false( ok, "Undetected close of unsatisfied action" )
+		assert_match( "Closes unsatisfied action", err )
+	end
+	function close_multiple_test ()
+		m.foo(1) ;mc:label(1) :times(0,1)
+		m.foo(1) ;mc:label(2) :times(0,1)
+		m.foo(1)
+		m.bar() ;mc:close(1,2)
+		mc:replay()
+		m.bar()
+		m.foo(1)
+		mc:verify()
+	end
+
+<<Unit test for module mock; close>>=
+	function close_chaining_test ()
+		m.a = 1 ;mc:label 'A'
+		m.b = 1 ;mc:label 'B'
+		m.c = 1 ;mc:close('A'):close('B')
+	end
+	function close_in_replay_mode_fails_test ()
+		mc:replay()
+		local ok, err = pcall( function() mc:close( 'foo' ) end )
+		assert_false( ok, "accepted close in replay mode" )
+		assert_match( "Can not insert close in replay mode", err )
+	end
+	function close_on_empty_actionlist_fails_test ()
+		local ok, err = pcall( function() mc:close( 'bar' ) end )
+		assert_false( ok, "accepted close with empty action list" )
+		assert_match( "No action is recorded yet", err )
+	end
+@
+
+Adding closes
+-------------
+
+<<Class Controller method close>>=
+	function Controller:close (...)
+		if not self.is_recording then
+			error( "Can not insert close in replay mode.", 2 )
+		end
+		local action = self:get_last_action()
+		for _, close in ipairs{ ... } do
+			action:add_close( close )
+		end
+		return self -- for chaining
+	end
+
+<<Class Action.generic method add_close>>=
+	function Action.generic:add_close (label)
+		add_to_set( self, 'closelist', label )
+	end
+@
+
+Perform closes
+--------------
+
+<<Class Controller method close_actions>>=
+	function Controller:close_actions( ... ) -- takes iterator
+		for label in ... do
+			for candidate in self:actions() do
+				if candidate:has_label( label ) then
+					if not candidate:is_satisfied() then
+						error( "Closes unsatisfied action: "..candidate:tostring(), 0 )
+					end
+					candidate.is_closed = true
+				end
+			end
+		end
+	end
+
+<<Class Action.generic method closes>>=
+	function Action.generic:closes ()
+		return elements_of_set( self, 'closelist' )
+	end

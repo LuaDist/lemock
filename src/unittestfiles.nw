@@ -1,0 +1,169 @@
+Lua Easy Mock -- LeMock
+Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+See terms in file COPYRIGHT, or at http://lemock.luaforge.net
+@
+
+module
+------
+
+<<unit/module.lua>>=
+	<<Lua file blurb>>
+	
+	require 'lunit'
+	module( 'unit.module', lunit.testcase, package.seeall )
+	
+	require 'lemock'
+	
+	local mc, m
+	
+	function setup ()
+		mc = lemock.controller()
+		m  = mc:mock()
+	end
+
+	<<Unit test for module mock; close>>
+	<<Unit test for module mock; depend>>
+	<<Unit test for module mock; label>>
+	<<Unit test for module mock; make callable>>
+	<<Unit test for module mock; mock creation>>
+	<<Unit test for module mock; replay>>
+	<<Unit test for module mock; switching to replay mode>>
+	<<Unit test for module mock; times>>
+	<<Unit test for module mock; verify>>
+	
+	<<Unit test for module mock call>>
+	<<Unit test for module mock error>>
+	<<Unit test for module mock index>>
+	<<Unit test for module mock newindex>>
+	<<Unit test for module mock returnvalue>>
+	<<Unit test for module mock selfcall>>
+@
+
+controller
+----------
+
+<<unit/controller.lua>>=
+	<<Lua file blurb>>
+	
+	require 'lunit'
+	module( 'unit.controller', lunit.testcase, package.seeall )
+	
+	local class, object, qtostring, sfmt, add_to_set, elements_of_set
+	<<Helper function class and object>>
+	<<Helper function qtostring and sfmt>>
+	<<Helper function add_to_set and elements_of_set>>
+	
+	<<Module mock private data mock_controller_map>>
+	
+	local Controller, Action
+	<<Class Controller>>
+	<<Class Action>>
+	
+	local A = Action.generic
+	Action = nil -- only allow generic action
+	function A:tostring () return '<dummy>' end
+	
+	local mc
+	
+	function setup ()
+		mc = Controller:new()
+	end
+	
+	<<Unit test for class Controller method actions>>
+	<<Unit test for class Controller method add_action>>
+	<<Unit test for class Controller method get_last_action>>
+	<<Unit test for class Controller method label>>
+	<<Unit test for class Controller method lookup>>
+	<<Unit test for class Controller method replay>>
+	<<Unit test for class Controller method replay_action>>
+@
+
+argv
+----
+
+<<unit/argv.lua>>=
+	<<Lua file blurb>>
+	
+	require 'lunit'
+	module( 'unit.argv', lunit.testcase, package.seeall )
+	
+	local class, object, value_equal, sfmt, qtostring
+	<<Helper function class and object>>
+	<<Helper function value_equal>>
+	<<Helper function qtostring and sfmt>>
+	
+	local Argv
+	<<Class Argv>>
+	
+	<<Unit test for class Argv method equal>>
+	<<Unit test for class Argv method new>>
+	<<Unit test for class Argv method tostring>>
+	<<Unit test for class Argv method unpack>>
+@
+
+action_generic
+--------------
+
+<<unit/action_generic.lua>>=
+	<<Lua file blurb>>
+	
+	require 'lunit'
+	module( 'unit.action_generic', lunit.testcase, package.seeall )
+	
+	local class, object, qtostring, sfmt, add_to_set, elements_of_set
+	<<Helper function class and object>>
+	<<Helper function qtostring and sfmt>>
+	<<Helper function add_to_set and elements_of_set>>
+	
+	local Action, Argv
+	<<Class Action>>
+	<<Class Argv>>
+	
+	local A = Action.generic
+	Action = nil -- only allow generic action
+	function A:tostring () return "<generic action>" end
+	
+	local a
+	
+	function setup ()
+		a = A:new()
+	end
+	
+	<<Unit test for Class Action.generic method add_depend and depends>>
+	<<Unit test for class Action.generic label methods>>
+	<<Unit test for class Action.generic method is_expected>>
+	<<Unit test for class Action.generic method is_satisfied>>
+	<<Unit test for class Action.generic method match>>
+	<<Unit test for class Action.generic method new>>
+	<<Unit test for class Action.generic method set_times>>
+@
+
+action
+------
+
+<<unit/action.lua>>=
+	<<Lua file blurb>>
+	
+	require 'lunit'
+	module( 'unit.action', lunit.testcase, package.seeall )
+	
+	local class, object, qtostring, sfmt
+	<<Helper function class and object>>
+	<<Helper function value_equal>>
+	<<Helper function qtostring and sfmt>>
+	
+	local Action, Argv
+	<<Class Action>>
+	<<Class Argv>>
+	
+	<<Unit test for class Action.call method match>>
+	<<Unit test for class Action.call method tostring>>
+	<<Unit test for class Action.generic_call method get_returnvalue>>
+	<<Unit test for class Action.index method match>>
+	<<Unit test for class Action.index method new>>
+	<<Unit test for class Action.index method set_returnvalue>>
+	<<Unit test for class Action.index method tostring>>
+	<<Unit test for class Action.newindex method match>>
+	<<Unit test for class Action.newindex method tostring>>
+	<<Unit test for class Action.selfcall method match>>
+	<<Unit test for class Action.selfcall method tostring>>

@@ -1,0 +1,44 @@
+LeMock Readme
+
+
+== What is Lua Easy Mock ==
+
+LeMock (Lua Easy Mock) is a mock creation module intended for use together
+with a unit test framework such as lunit or lunity. It is inspired by
+EasyMock (for Java), and strives to be easy to use.
+
+
+== Availability ==
+
+LeMock is hosted at LuaForge at http://luaforge.net/projects/lemock/
+
+
+== Installation ==
+
+Copy the file build/lemock.lua to a Lua search path directory. This is
+usually something like ``/usr/share/lua/5.1/`` or
+``/usr/local/lib/lua/5.1/``. You can type ``print(package.path)`` at the
+Lua prompt to see what search path your Lua installation is using.
+
+Documentation in HTML format is available in build/htdocs/.
+
+
+== License ==
+
+LeMock is licensed under the MIT license, which is the same license that
+Lua uses. See COPYRIGHT_ for full terms.
+
+
+== User Documentation ==
+
+See build/htdocs/userguide.html.
+
+
+== Development ==
+
+LeMock is implemented in Lua 5.1, but its source code is written as
+literate documents, and uses the tool noweb to tangle the .lua files. The
+distributed source archive includes all the tangled files, to avoid
+depending on noweb for installation. See DEVEL_ for information about how
+the source code is organized, and what tools are needed for the build
+process.

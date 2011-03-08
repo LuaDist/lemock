@@ -1,0 +1,761 @@
+Lua Easy Mock -- LeMock
+Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+See terms in file COPYRIGHT, or at http://lemock.luaforge.net
+@
+
+Introduction
+############
+
+<<Userguide Introduction>>=
+
+Mock objects replace difficult external objects during unit testing by
+simulating the behaviors of the replaced objects. This is done by first
+recording actions and their responses with the mock objects, and then
+switching to replay mode. During replay mode the mock objects simulate the
+replaced objects by looking up actions and replaying the recorded
+responses, and finally verifying that all expected actions where completely
+replayed.
+
+Actions are stored in a list in a special controller object. During replay
+the list is searched in recording order for the first matching action that
+can be replayed.
+
+Restrictions on the actions can be inserted during the recording phase. An
+action can have a maximum count of how many times it will be replayed, and
+a minimum count of how many times it must be replayed to be satisfied. An
+action can depend on any set of other actions, and can not be replayed
+before all of its depended actions are satisfied. An action can close any
+set of actions when it is replayed, which stops all further replaying of
+the closed actions. This is good for simulating state changes.
+@
+
+Manage Actions
+##############
+
+The Action List
+===============
+
+Actions are stored in a list in a special Controller object. To keep it
+simple, the list is a simple array table. The controller has an
+[[add_action]] method, and a [[lookup]] method. Actions are added at the
+end, and looked up from the beginning.
+
+
+add_action
+----------
+
+<<Unit test for class Controller method add_action>>=
+	function add_action_at_the_end_test ()
+		mc:add_action( 7 )
+		mc:add_action( mc )
+		assert_equal( 7, mc.actionlist[1] )
+		assert_equal( mc, mc.actionlist[2] )
+	end
+
+<<Class Controller method add_action>>=
+	function Controller:add_action (a)
+		assert( a ~= nil, "lemock internal error" ) -- breaks array property
+		table.insert( self.actionlist, a )
+	end
+@
+
+lookup and actions
+------------------
+
+It should be easy to add new action types, so the [[lookup]] method
+delegates matching to the [[match]] method of the Action objects in the
+list. If there is no match an error is thrown with a list of all actions
+that could have been matched.
+
+<<Unit test for class Controller method lookup>>=
+	function lookup_returns_first_matching_action_test ()
+		local Fake_action
+		<<Simple Fake_action class>>
+		local a1 = Fake_action:new(1)
+		local a2 = Fake_action:new(2)
+		local a3 = Fake_action:new(1)
+		local ok, err = pcall( function() mc:lookup( a1 ) end )
+		assert_false( ok, "match in empty list" )
+		assert_match( "Unexpected action <faked action>", err )
+		mc:add_action( a1 ) mc:add_action( a2 ) mc:add_action( a3 )
+		local ok, err = pcall( function() mc:lookup( a1 ) end )
+		assert_false( ok, "should not match any action" )
+		assert_match( "Unexpected action <faked action>", err )
+		assert_equal( a1, mc:lookup( a2 ), "did not find first match" )
+	end
+
+<<Class Controller method lookup>>=
+	function Controller:lookup (actual)
+		for action in self:actions() do
+			if action:match( actual ) then
+				return action
+			end
+		end
+		<<Find all expected actions>>
+		error( sfmt( "Unexpected action %s, expected:\n%s\n"
+		             , actual:tostring()
+		             , table.concat(expected,'\n')
+		       )
+		       , 0
+		)
+	end
+@
+There is no point in listing index actions for callables, since they will
+just mirror the call actions.
+
+Sorting the list will make it easier for the user to conclude that an
+expected action is "missing", because there will be a definite place in the
+list where the action would have been.
+
+<<Find all expected actions>>=
+	local expected = {}
+	for _, a in ipairs( self.actionlist ) do
+		if a:is_expected() and not a.is_callable then
+			expected[#expected+1] = a:tostring()
+		end
+	end
+	table.sort( expected )
+	if #expected == 0 then
+		expected[1] = "(Nothing)"
+	end
+@
+Many functions iterate over all the actions in the action list.
+
+<<Unit test for class Controller method actions>>=
+	function actions_dont_iterate_empty_list_test ()
+		for a in mc:actions() do
+			fail( "iterates on empty list" )
+		end
+	end
+	function actions_iterate_over_entire_list_exactly_once_test ()
+		local l = { {},{},{} }
+		for _, a in ipairs( l ) do
+			mc:add_action( a )
+		end
+		for a in mc:actions() do
+			assert_nil( a.check )
+			a.check = true
+		end
+		for _, a in ipairs( l ) do
+			assert_true( a.check )
+		end
+	end
+
+<<Class Controller method actions>>=
+	function Controller:actions (q)
+		local l = self.actionlist
+		local i = 0
+		return function ()
+			i = i + 1
+			return l[i]
+		end				
+	end
+@
+
+The Controller object will allow the user to set return values or
+restrictions on the last recorded action.
+
+last
+----
+
+<<Unit test for class Controller method get_last_action>>=
+	function get_last_action_returns_last_element_test ()
+		local l = { 'a', 'foo', 17 }
+		for i = 1, #l do
+			mc:add_action( l[i] )
+			local res = mc:get_last_action()
+			assert_equal( l[i], res )
+		end
+	end
+	function get_last_action_fails_on_empty_list_test ()
+		local ok, err = pcall( function() mc:get_last_action() end )
+		assert_false( ok, "Found last action in empty list" )
+		assert_match( "No action is recorded yet", err )
+	end
+
+<<Class Controller method get_last_action>>=
+	function Controller:get_last_action ()
+		local l = self.actionlist
+		if #l == 0 then
+			error( "No action is recorded yet.", 0 )
+		end
+		return l[#l]
+	end
+@
+
+Actions
+=======
+
+Each Action type is implemented as a specialized class so it is easy to add
+new action types. The action class is responsible for storing information
+and state. The Mock class and Callable class are responsible for catching
+and recording/replaying the action with help from the information in the
+Action object.
+
+Action types differ in what information they need to store, and therefore
+how they are constructed, matched by lookup, and printed as strings. The
+concrete or extended implementations of the methods [[new]], [[match]], and
+[[tostring]], are therefore implemented together with the corresponding
+Mock and Callable meta methods responsible for catching the action,
+arranged in separate source files in the action/ directory.
+
+
+New
+---
+
+New Action objects are created with default [[min_replays]] and
+[[max_replays]] equal to one, which means each recorded action is expected
+to be replayed exactly once. This method will be extended by the the
+concrete Action class types.
+
+<<Unit test for class Action.generic method new>>=
+	function new_action_has_right_default_values_test ()
+		assert_equal( 0, a.replay_count )
+		assert_equal( 1, a.min_replays )
+		assert_equal( 1, a.max_replays )
+	end
+
+<<Class Action.generic method new>>=
+	function Action.generic:new (mock)
+		local a = object( self )
+		a.mock         = mock
+		a.replay_count = 0
+		a.min_replays  = 1
+		a.max_replays  = 1
+		return a
+	end
+@
+
+match and is_expected
+---------------------
+
+The [[match]] method takes an Action object as key for the search, because
+it is a convenient way to pass all the needed properties. The Action
+objects in the action list should compare themselves with the key to see if
+they can replay such an action. The state properties of the key object are
+of course not used, but the state of the actions in the list is important
+for if the actions can be replayed or not. The method [[is_expected]]
+examines if the state allows the action to be replayed. The [[match]]
+method will be extended by the concrete Action class types.
+
+<<Unit test for class Action.generic method is_expected>>=
+	function expect_unreplayed_action_test ()
+		assert_true( a:is_expected() )
+	end
+
+<<Class Action.generic method is_expected>>=
+	function Action.generic:is_expected ()
+		return self.replay_count < self.max_replays
+		   and not self.is_blocked
+		   and not self.is_closed
+	end
+
+<<Unit test for class Action.generic method match>>=
+	function match_unreplayed_test ()
+		assert_true( a:match( a ))
+	end
+	function match_rejects_replayed_action_test ()
+		a.replay_count = 1
+		assert_false( a:match( a ))
+	end
+	function match_rejects_wrong_action_type_test ()
+		-- Fake different type
+		local B = class( A )
+		local b = B:new()
+		assert_false( a:match( b ))
+	end
+
+<<Class Action.generic method match>>=
+	function Action.generic:match (key)
+		if getmetatable(self) ~= getmetatable(key)  then return false end
+		if self.mock ~= key.mock                    then return false end
+		return self:is_expected()
+	end
+@
+
+replay_action
+-------------
+
+The [[replay]] method updates the state of an Action. It has nothing to do
+with performing the action, which is done by the Mock class and Callable
+class. It is an internal error to call this method with an action that is
+not expected.
+
+<<Unit test for class Controller method replay_action>>=
+	function replay_action_test ()
+		local a = A:new()
+		mc:add_action( a )
+		assert_true( a:is_expected() )
+		assert_false( a:is_satisfied() )
+		mc:replay_action( a )
+		assert_false( a:is_expected() )
+		assert_true( a:is_satisfied() )
+		assert_equal( 1, a.replay_count )
+	end
+
+<<Class Controller method replay_action>>=
+	function Controller:replay_action ( action )
+		assert( action:is_expected(), "lemock internal error" )
+		assert( action.replay_count < action.max_replays, "lemock internal error" )
+		local was_satisfied = action:is_satisfied()
+		action.replay_count = action.replay_count + 1
+		if not was_satisfied and action.labellist and action:is_satisfied() then
+			self:update_dependencies()
+		end
+		if action.closelist then
+			self:close_actions( action:closes() )
+		end
+	end
+@
+
+is_satisfied and assert_satisfied
+---------------------------------
+
+When the replay phase is finished the Controller needs to verify that all
+the actions in the action list have been satisfied. If some action is not
+satisfied it is an error, so [[assert_satisfied]] must also throw an
+appropriate error.
+
+<<Unit test for class Action.generic method is_satisfied>>=
+	function unreplayed_action_is_not_satisfied_test ()
+		assert_false( a:is_satisfied() )
+	end
+	function assert_satisfied_unreplayed_action_fails_test ()
+		local ok, err = pcall( function() a:assert_satisfied() end )
+		assert_false( ok, "unreplayed action was satisfied" )
+		assert_match( "Wrong replay count 0", err )
+	end
+
+<<satisfied expression>>=
+	self.min_replays <= self.replay_count
+
+<<Class Action.generic method is_satisfied>>=
+	function Action.generic:is_satisfied ()
+		return <<satisfied expression>>
+	end
+
+<<Class Action.generic method assert_satisfied>>=
+	function Action.generic:assert_satisfied ()
+		assert( self.replay_count <= self.max_replays, "lemock internal error" )
+		if not (<<satisfied expression>>) then
+			error( sfmt( "Wrong replay count %d (expected %d..%d) for %s"
+			             , self.replay_count
+			             , self.min_replays, self.max_replays
+			             , self:tostring()
+			       )
+			       , 0
+			)
+		end
+	end
+@
+
+Catching and Simulating Actions
+###############################
+
+Three classes work in tight connection to catch, record, and replay
+actions. They are [[Controller]], [[Mock]], and [[Callable]].
+
+The Controller is the main class, and it stores the action list with all
+the Actions. The Controller is used to record explicit information that can
+not be caught in an automatic manner by the Mock or Callable objects, such
+as retur values. It is used to record meta information such as replay
+limits and replay order dependencies. It is used to create the Mock
+objects, to switch to replay mode, and to verify the completeness of the
+replay phase.
+
+The Mock must be completely empty of methods and properties, because we
+want to catch all of them, without accidentally shadowing any names. So it
+can only use Lua meta methods, like [[__index]] and [[__newindex]]. Because
+of this limitation it is not possible to store a reference to the
+Controller in the Mock object, so we need a map for this.
+
+<<Module mock private data mock_controller_map>>=
+	local mock_controller_map = setmetatable( {}, {__mode='k'} )
+@
+When a method of a Mock object is called there are actually two actions.
+First the method's name is indexed, and then the returned object is called.
+So the Mock [[__index]] meta method must record the index part, *and* return
+something with a [[__call]] meta method that can record the call part. This
+something is a [[Callable]] object.
+
+
+Setup Phase
+===========
+
+The Controller
+--------------
+
+To keep the user interface clean the Controller class itself is never
+exported. The module function [[controller]] creates a new local controller
+object, and creates and returns a wrapper for it with the exported methods.
+
+<<Module mock function controller>>=
+	function controller ()
+		local exported_methods = {
+			'anytimes',
+			'atleastonce',
+			'close',
+			'depend',
+			'error',
+			'label',
+			'mock',
+			'new',
+			'replay',
+			'returns',
+			'times',
+			'verify',
+		}
+		local mc = Controller:new()
+		local wrapper = {}
+		for _, method in ipairs( exported_methods ) do
+			wrapper[ method ] = function (self, ...)
+				return mc[ method ]( mc, ... )
+			end
+		end
+		wrapper.ANYARG  = Argv.ANYARG
+		wrapper.ANYARGS = Argv.ANYARGS
+		return wrapper
+	end
+
+<<Class Controller method new>>=
+	function Controller:new ()
+		local mc = object( self )
+		mc.actionlist   = {}
+		mc.is_recording = true
+		return mc
+	end
+@
+
+The Mock
+--------
+
+The Mock class has two modes, one for recording and one for replaying.
+These two modes are implemented as two different metatables. The [[class]
+helper functions is not used to create them, because it sets [[__index]] to
+be a self reference. The [[__index]] meta method, and other meta methods,
+of the two Mock metatables are used for catching actions, and are defined
+in the corresponding action source files.
+
+<<Class Mock meta tables Mock.record and Mock.replay>>=
+	Mock = { record={}, replay={} } -- no self-referencing __index!
+@
+Because the Mock must be completely empty it can not have a [[new]] method.
+So the Controller has a [[mock]] method that creates and returns new mock
+objects, and maps them to itself in [[mock_controller_map]]. The Mock is
+created in record mode, but will be switched to replay mode later by the
+Controller.
+
+<<Unit test for module mock; mock creation>>=
+	function create_completely_empty_mock_test ()
+		for k, v in pairs( m ) do
+			fail( "Mock should be empty but contains "..tostring(k) )
+		end
+	end
+	function create_mock_during_replay_fails_test ()
+		mc:replay()
+		local ok, err = pcall( function() mc:mock() end )
+		assert_false( ok, "mock() succeeded" )
+		assert_match( "New mock during replay.", err )
+	end
+
+<<Class Controller method mock>>=
+	function Controller:mock ()
+		if not self.is_recording then
+			error( "New mock during replay.", 2 )
+		end
+		local m = object( Mock.record )
+		mock_controller_map[m] = self
+		return m
+	end
+@
+
+The Callable
+------------
+
+A Callable is only created as the result of an index action. It is not
+known at the time of the index action if the index will be called, but if
+it is, the call action must update the index action with this information,
+and therefore needs a reference to it.
+
+<<Class Callable.generic method new>>=
+	function Callable.generic:new ( index_action )
+		local f = object( self )
+		f.action = index_action
+		return f
+	end
+@
+
+Record Phase
+============
+
+Return Values and Callables
+---------------------------
+
+Index action can either have a return value or be callable, in which case
+they return a Callable object. When the call action is recorded the
+corresponding index action must be marked as [[is_callable]], so that it
+knows it shall return a Callable object during replay mode.
+
+Index actions that return callables have their replay count limits set to
+any-times, because all control adjustments will be made to the call action,
+and it should not matter how many times the callable is retrieved from the
+mock, but only how many times and in what order it is called.
+
+If the retrieval count and/or order is important it is still possible to
+simulate such behavior with an index action returning a mock object. Then
+the index action can be controlled, and the call action can instead be
+recorded with the selfcall action of the returned mock object.
+
+<<Unit test for module mock; make callable>>=
+	function returns_on_empty_list_fails_test ()
+		local ok, err = pcall( function() mc:returns(nil) end )
+		assert_false( ok, "returns called on nothing" )
+		assert_match( "No action is recorded yet.", err )
+	end
+	function returns_make_call_fail_test ()
+		local tmp = m.foo ;mc:returns(1)
+		local ok, err = pcall( function() tmp(2) end )
+		assert_false( ok, "called index with returnvalue" )
+		assert_match( "Can not call foo. It has a returnvalue.", err )
+	end
+	function callable_index_replays_anytimes_test ()
+		local tmp = m.foo()
+		mc:replay()
+		tmp = m.foo
+		tmp = m.foo
+		tmp = m.foo()
+		mc:verify()
+	end
+
+<<Class Controller method make_callable>>=
+	function Controller:make_callable (action)
+		if action.has_returnvalue then
+			error( "Can not call "..action.key..". It has a returnvalue.", 0 )
+		end
+		action.is_callable = true
+		action.min_replays = 0
+		action.max_replays = math.huge
+	end
+@
+Action classes that can return a value have the [[can_return]] property
+set, and they implement the [[set_returnvalue]] and [[get_returnvalue]]
+methods.
+
+If an index action is marked as [[is_callable]] it ought to be followed by
+a call action responsible for making it callable, and since it is no longer
+the last action it should be impossible to set a returnvalue for the index
+action. Doing so is an internal error.
+
+<<Unit test for module mock returnvalue>>=
+	function returns_during_replay_fails_test ()
+		local tmp = m.foo
+		mc:replay()
+		local ok, err = pcall( function() mc:returns(1) end )
+		assert_false( ok, "returns() succeeded during replay" )
+		assert_match( "Returns called during replay.", err )
+	end
+	function returns_on_nonreturning_action_fails_test ()
+		m.foo = 1 -- assignments can't return
+		local ok, err = pcall( function() mc:returns(0) end )
+		assert_false( ok, "returns() succeeded on non-returning action" )
+		assert_match( "Previous action can not return anything.", err )
+	end
+	function returns_twice_fails_test ()
+		local tmp = m.foo ;mc:returns(1)
+		local ok, err = pcall( function() mc:returns(2) end )
+		assert_false( ok, "duplicate returns() succeeded" )
+		assert_match( "Returns and/or Error called twice for same action.", err )
+	end
+
+<<Class Controller method returns>>=
+	function Controller:returns (...)
+		if not self.is_recording then
+			error( "Returns called during replay.", 2 )
+		end
+		local action = self:get_last_action()
+		assert( not action.is_callable, "lemock internal error" )
+		if not action.can_return then
+			error( "Previous action can not return anything.", 2 )
+		end
+		if action.has_returnvalue or action.throws_error then
+			error( "Returns and/or Error called twice for same action.", 2 )
+		end
+		action:set_returnvalue(...)
+		return self -- for chaining
+	end
+@
+
+Throwing Errors
+---------------
+
+Any action can be made to throw a recorded error when replayed. For
+example, a newindex action could simulate an assignment to a userdata och
+table with a metatable that is supposed to throw an error on assignments.
+
+<<Unit test for module mock error>>=
+	function error_during_replay_fails_test ()
+		local tmp = m.foo
+		mc:replay()
+		local ok, err = pcall( function() mc:error(1) end )
+		assert_false( ok, "error() succeeded during replay" )
+		assert_match( "Error called during replay.", err )
+	end
+	function error_twice_fails_test ()
+		local tmp = m.foo ;mc:error(1)
+		local ok, err = pcall( function() mc:error(2) end )
+		assert_false( ok, "duplicate error() succeeded" )
+		assert_match( "Returns and/or Error called twice for same action.", err )
+	end
+	function error_plus_returns_fails_test ()
+		local tmp = m.foo ;mc:returns(1)
+		local ok, err = pcall( function() mc:error(2) end )
+		assert_false( ok, "both error and returns succeeded" )
+		assert_match( "Returns and/or Error called twice for same action.", err )
+	end
+
+<<Class Controller method error>>=
+	function Controller:error (value)
+		if not self.is_recording then
+			error( "Error called during replay.", 2 )
+		end
+		local action = self:get_last_action()
+		if action.has_returnvalue or action.throws_error then
+			error( "Returns and/or Error called twice for same action.", 2 )
+		end
+		action.throws_error = true
+		action.errorvalue = value
+		return self -- for chaining
+	end
+@
+
+Switching from Record Mode to Replay Mode
+=========================================
+
+Switching to replay mode is done by changing all Mock objects' matatables.
+It is an error to call [[replay]] twice on the same Controller.
+
+Dependency information (see restrictions.nw) is not calculated in real
+time. It is updated when needed, for example before starting the replay
+phase. This is also a good point to check for dependency cycles.
+
+<<Unit test for module mock; switching to replay mode>>=
+	function replay_twice_fails_test ()
+		mc:replay()
+		local ok, err = pcall( function() mc:replay() end )
+		assert_false( ok, "replay succeeded twice" )
+		assert_match( "Replay called twice.", err )
+	end
+	function multiple_controllers_test ()
+		local mc2 = lemock.controller()
+		local m2  = mc2:mock()
+		
+		-- m --         -- m2 --
+		m.foo = 1
+		mc:replay()
+						m2.bar = 2
+		m.foo = 1
+						mc2:replay()
+		mc:verify()
+						m2.bar = 2
+						mc2:verify()
+	end
+
+<<Unit test for class Controller method replay>>=
+	function replay_test ()
+		assert_true( mc.is_recording )
+		mc:replay()
+		assert_false( mc.is_recording )
+	end
+
+<<Class Controller method replay>>=
+	function Controller:replay ()
+		if not self.is_recording then
+			error( "Replay called twice.", 2 )
+		end
+		self.is_recording = false
+		for m, mc in pairs( mock_controller_map ) do
+			if mc == self then
+				setmetatable( m, Mock.replay )
+			end
+		end
+		self:update_dependencies()
+		self:assert_no_dependency_cycles()
+	end
+@
+
+Replay Phase
+============
+
+The key point with the replay phase is that unexpected actions should fail.
+
+<<Unit test for module mock; replay>>=
+	function replay_in_any_order_test ()
+		m.a = 1
+		m.b = 2
+		m.c = 3
+		mc:replay()
+		m.c = 3
+		m.a = 1
+		m.b = 2
+		mc:verify()
+	end
+	function replaying_unexpected_action_fails_test ()
+		mc:replay()
+		local ok, err = pcall( function() m:somethingelse() end )
+		assert_false( ok, "unexpected replay succeeded" )
+		assert_match( "Unexpected action index somethingelse", err )
+	end
+@
+There is an error that would be very hard to track down if it is not
+detected. During record mode the Mock returns recording Callables, but
+during replay mode it returns replaying Callables. If the client caches a
+Callable in record mode and uses it during replay mode, it would not fail
+straight away as desired (if undetected), but record a false action which
+would mess up the action list and cause some later action or the final
+verify to pass or fail with a perplexing error message.
+
+<<Unit test for module mock; replay>>=
+	function cached_recording_callable_fails_during_replay_test ()
+		local tmp = m.foo ; tmp()
+		mc:replay()
+		local ok, err = pcall( function() tmp() end )
+		assert_false( ok, "Cached callable not detected" )
+		assert_match( "client uses cached callable from recording", err )
+	end
+@
+
+Verify Completeness Phase
+=========================
+
+Unknown or misplaced actions can be detected during the replay phase, but
+expected actions that are not replayed can not be detected until the replay
+phase is finished. That is why the verify phase is needed, and it simply
+asserts that all recorded actions have been satisfied.
+
+<<Unit test for module mock; verify>>=
+	function verify_during_record_phase_fails_test ()
+		local ok, err = pcall( function() mc:verify() end )
+		assert_false( ok, "Verify succeeded" )
+		assert_match( "Verify called during record.", err )
+	end
+	function verify_replayed_actionlist_test ()
+		mc:replay()
+		mc:verify()
+	end
+	function verify_unreplyed_actionlist_fails_test ()
+		local tmp = m.foo
+		mc:replay()
+		local ok, err = pcall( function() mc:verify() end )
+		assert_false( ok, "Verify succeeded" )
+		assert_match( "Wrong replay count 0 ", err )
+	end
+
+<<Class Controller method verify>>=
+	function Controller:verify ()
+		if self.is_recording then
+			error( "Verify called during record.", 2 )
+		end
+		for a in self:actions() do
+			a:assert_satisfied()
+		end
+	end

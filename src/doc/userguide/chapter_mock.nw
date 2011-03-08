@@ -1,0 +1,21 @@
+Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+See terms in file COPYRIGHT, or at http://lemock.luaforge.net
+@
+
+<<Userguide Chapter The Mock Object>>=
+= The Mock Object =
+
+Mock objects are empty objects with special Lua meta methods that detect
+actions performed with the object. What happens depends on the state
+(recording or replaying) of the controller which created the mock object.
+During recording the mock object adds the action to the controller's list
+of recorded actions. During replay the mock object looks for a matching
+recorded action that can be replayed, and simulates the action.
+
+Some action attributes can not be inferred by the mock objects, for example
+return values. These attributes have to be added afterwards with special
+controller methods, and always affect the last recorded action.
+
+<<Userguide Section Actions>>
+<<Userguide Section Anyargs>>
+@

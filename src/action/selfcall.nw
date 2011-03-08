@@ -1,0 +1,95 @@
+Lua Easy Mock -- LeMock
+Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+@
+
+The Call Action
+###############
+
+The selfcall action is made to the Mock object itself, so no Callable or
+index action is needed.
+
+<<Unit test for module mock selfcall>>=
+	function selfcall_test ()
+		m(11)
+		mc:replay()
+		local tmp = m(11)
+		assert_nil( tmp )
+		mc:verify()
+	end
+	function selfcall_returns_test ()
+		m(99) ;mc:returns(1,nil,'foo')
+		mc:replay()
+		local a,b,c = m(99)
+		assert_equal( 1, a )
+		assert_equal( nil, b )
+		assert_equal( 'foo', c )
+		mc:verify()
+	end
+	function selfcall_wrong_argument_fails_test ()
+		m(99) ;mc:returns('a','b','c')
+		mc:replay()
+		local ok, err = pcall( function() m(90) end )
+		assert_false( ok, "replay succeeded" )
+		assert_match( "Unexpected action selfcall", err )
+	end
+	function selfcall_wrong_number_of_arguments_fails_test ()
+		m(1,2,3)
+		mc:replay()
+		local ok, err = pcall( function() m(1,2,3,4) end )
+		assert_false( ok, "replay succeeded" )
+		assert_match( "Unexpected action selfcall", err )
+	end
+	function selfcall_throws_error_test ()
+		m('Ba') ;mc:error( "Selfcall throws error" )
+		mc:replay()
+		local ok, err = pcall( function() m('Ba') end )
+		assert_false( ok, "did not throw error" )
+		assert_match( "Selfcall throws error", err )
+	end
+@
+
+Record Phase
+============
+
+<<Class Mock.record selfcall>>=
+	function Mock.record:__call (...)
+		local mc = mock_controller_map[self]
+		mc:add_action( Action.selfcall:new( self, ... ))
+	end
+
+<<Class Action.selfcall method new>>=
+	function Action.selfcall:new (m, ...)
+		local a = Action.generic_call.new( self, m, ... )
+		return a
+	end
+@
+
+Replay Phase
+============
+
+<<Class Mock.replay selfcall>>=
+	function Mock.replay:__call (...)
+		local mc = mock_controller_map[self]
+		local selfcall_action = mc:lookup( Action.selfcall:new( self, ... ))
+		mc:replay_action( selfcall_action )
+		if selfcall_action.throws_error then
+			error( selfcall_action.errorvalue, 2 )
+		end
+		return selfcall_action:get_returnvalue()
+	end
+
+<<Unit test for class Action.selfcall method match>>=
+	function selfcall_match_test ()
+		local m = {}
+		local a = Action.selfcall:new( m, 5, nil, false )
+		assert_true(  a:match( Action.selfcall:new( m, 5, nil, false )))
+		assert_false( a:match( Action.selfcall:new( {}, 5, nil, false )))
+		assert_false( a:match( Action.selfcall:new( m, nil, nil, false )))
+		assert_false( a:match( Action.selfcall:new( m, 5, false, false )))
+		assert_false( a:match( Action.selfcall:new( m, 5, nil, nil )))
+	end
+
+<<Class Action.selfcall method match>>=
+	function Action.selfcall:match (q)
+		return Action.generic_call.match( self, q )
+	end

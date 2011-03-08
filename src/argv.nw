@@ -1,0 +1,158 @@
+Lua Easy Mock -- LeMock
+Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+See terms in file COPYRIGHT, or at http://lemock.luaforge.net
+@
+
+Class Argv
+##########
+
+It is convenient to handle argument lists and return lists as an abstract
+type.
+
+<<Userguide Anyargs>>=
+
+An //anyarg// is a special argument used when recording, that will match
+any argument during replay. It can appear anywhere and any times in an
+argument list, or as the argument in an assignment, to replace real
+arguments. There is also //anyargs//, which will match any number
+(including zero) of any arguments. Anyargs can only appear as the last
+argument of an argument list. Anyarg and anyargs are handy when the actual
+values of the arguments during replay are unimportant or unknown.
+@
+
+new
+---
+
+<<Unit test for class Argv method new>>=
+	function new_test ()
+		Argv:new( Argv.ANYARGS )
+		Argv:new( 1, Argv.ANYARGS )
+		Argv:new( 1, 2, Argv.ANYARGS )
+	end
+	function new_anyargs_with_extra_arguments_fails_test ()
+		local l = {}
+		l['ANYARGS,1']         = { Argv.ANYARGS, 1 }
+		l['ANYARGS,ANYARGS'  ] = { Argv.ANYARGS, Argv.ANYARGS }
+		l['1,ANYARGS,1']       = { 1, Argv.ANYARGS, 1 }
+		l['1,ANYARGS,ANYARGS'] = { 1, Argv.ANYARGS, Argv.ANYARGS }
+		for msg, args in pairs( l ) do
+			local ok, err = pcall( function() Argv:new( unpack(args) ) end )
+			assert_false( ok, "Bad ANYARGS accepted for "..msg )
+			assert_match( "ANYARGS not at end", err )
+		end
+	end
+
+<<Class Argv method new>>=
+	function Argv:new (...)
+		local av = object( self )
+		av.v = {...}
+		av.len = select('#',...)
+		for i = 1, av.len - 1 do
+			if av.v[i] == Argv.ANYARGS then
+				error( "ANYARGS not at end.", 0 )
+			end
+		end
+		return av
+	end
+@
+
+equal
+-----
+
+<<Unit test for class Argv method equal>>=
+	local l = {}
+	local function p (...) l[#l+1] = { n=select('#',...), ... } end
+	p() p(nil) p(nil,nil) p(false) p({}) p(false,nil,{},nil) p(nil,p)
+	p(true) p(0.1,'','a') p(1/0,nil,0/0) p(0/0) p(0/0, true) p(0/0, false)
+	function equal_test ()
+		local a1, a2, f, op
+		for i = 1, #l do
+			ai = Argv:new( unpack( l[i], 1, l[i].n ))
+			for j = 1, #l do
+				aj = Argv:new( unpack( l[j], 1, l[j].n ))
+				if i == j then
+					f, op = assert_true,  ') ~= ('
+				else
+					f, op = assert_false, ') == ('
+				end
+				f( ai:equal(aj), '('..ai:tostring()..op..aj:tostring()..')' )
+			end
+		end
+	end
+	function equal_anyargs_test ()
+		local a, b = {}, {}
+		a[1] = Argv:new( Argv.ANYARGS )
+		a[2] = Argv:new( 6, Argv.ANYARGS )
+		a[3] = Argv:new( 6, 5, Argv.ANYARGS )
+		for i = 1, #l do
+			b[1] = Argv:new( unpack( l[i], 1, l[i].n ))
+			b[2] = Argv:new( 6, unpack( l[i], 1, l[i].n ))
+			b[3] = Argv:new( 6, 5, unpack( l[i], 1, l[i].n ))
+			for j = 1, 3 do
+				local astr = '('..a[j]:tostring()..')'
+				local bstr = '('..b[j]:tostring()..')'
+				assert_true( a[j]:equal(b[j]), astr..' ~= '..bstr )
+				assert_true( b[j]:equal(a[j]), bstr..' ~= '..astr )
+			end
+		end
+	end
+	function equal_anyarg_test ()
+		local l = { 1, 2, 3, 4, 5, 6, 7, 8, 9 }
+		local a1 = Argv:new( unpack(l) )
+		for i = 1, 9 do
+			l[i] = Argv.ANYARG
+			local a2 = Argv:new( unpack(l) )
+			assert_true( a1:equal(a2) )
+			assert_true( a2:equal(a1) )
+			l[i] = i
+		end
+	end
+@
+The comparison with ANYARGS is a bit tricky, because it must match the
+empty list. The list //excluding// the final ANYARGS argument (its length
+minus one) must match the other list.
+
+ANYARG and ANYARGS are created as unique identifiers, with local aliases
+for speed.
+
+<<Class Argv method equal>>=
+	Argv.ANYARGS = newproxy()  local ANYARGS = Argv.ANYARGS
+	Argv.ANYARG  = newproxy()  local ANYARG  = Argv.ANYARG
+	function Argv:equal (other)
+		local a1, n1 = self.v,  self.len
+		local a2, n2 = other.v, other.len
+		if n1-1 <= n2 and a1[n1] == ANYARGS then
+			n1 = n1-1
+			n2 = n1
+		elseif n2-1 <= n1 and a2[n2] == ANYARGS then
+			n2 = n2-1
+			n1 = n2
+		end
+		if n1 ~= n2 then
+			return false
+		end
+		for i = 1, n1 do
+			local v1, v2 = a1[i], a2[i]
+			if not value_equal(v1,v2) and v1 ~= ANYARG and v2 ~= ANYARG then
+				return false
+			end
+		end
+		return true
+	end
+@
+
+unpack
+------
+
+<<Unit test for class Argv method unpack>>=
+	function unpack_test ()
+		local a, b, c = Argv:new( false, nil, 7 ):unpack()
+		assert_equal( false, a )
+		assert_equal( nil,   b )
+		assert_equal( 7,     c )
+	end
+
+<<Class Argv method unpack>>=
+	function Argv:unpack ()
+		return unpack( self.v, 1, self.len )
+	end

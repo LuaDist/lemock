@@ -1,0 +1,69 @@
+Lua Easy Mock -- LeMock
+Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+See terms in file COPYRIGHT, or at http://lemock.luaforge.net
+@
+
+<<Userguide Section Label & Depend>>=
+== Label & Depend ==
+
+Dependencies block actions from replaying until other actions have replayed
+first. They can be used to verify that actions are being replayed in a
+valid order.
+
+To add dependencies, actions must first be labeled with one or more
+//labels//. The same label can be given to several actions. As long as some
+action with the label remains unsatisfied, that label is blocked, and all
+actions depending on that label will not replay.
+
+=== Example ===
+
+This (contrived) example tests that function draw_square in module foo
+calls all the necessary drawing methods of a square object in a correct
+order. Note that there can be more than one correct order.
+
+```
+<<Userguide Example depend>>
+```
+
+This example demonstrates two different ways of using dependencies. All the
+corners have unique labels, because each edge depend on a set of specific
+corners. But all the edges have the same label, because the fill operation
+only depends on //all// edges have been satisfied.
+@
+
+<<Userguide Example depend>>=
+require 'lemock'
+local mc = lemock.controller()
+local square = mc:mock()
+
+square:topleft()   ;mc :label('tl')
+square:topright()  ;mc :label('tr')
+square:botleft()   ;mc :label('bl')
+square:botright()  ;mc :label('br')
+square:leftedge()  ;mc :label('edge') :depend('tl', 'bl')
+square:rightedge() ;mc :label('edge') :depend('tr', 'br')
+square:topedge()   ;mc :label('edge') :depend('tl', 'tr')
+square:botedge()   ;mc :label('edge') :depend('bl', 'br')
+square:fill()      ;mc                :depend('edge')
+
+mc:replay()
+require 'foo'
+foo.draw_square( square )
+
+mc:verify()
+@
+
+<<Unit test for Userguide Example depend>>=
+	function example_depend_test ()
+		package.loaded.foo = nil
+		package.preload.foo = function ()
+			foo = {}
+			function foo.draw_square (sq)
+				sq:botright() sq:topright() sq:rightedge()
+				sq:botleft()  sq:topleft()  sq:leftedge()
+				sq:topedge() sq:botedge()
+				sq:fill()
+			end
+		end
+		<<Userguide Example depend>>
+	end

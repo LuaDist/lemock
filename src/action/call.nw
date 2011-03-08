@@ -1,0 +1,122 @@
+Lua Easy Mock -- LeMock
+Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+@
+
+The Call Action
+###############
+
+The index action returns a Callable object, which will catch calls. The
+catching of the call will record a call action, and modify the index action
+to record the fact that it should return a Callable object during replay.
+
+<<Unit test for module mock call>>=
+	function call_test ()
+		m.foo(1,2,3)
+		mc:replay()
+		local tmp = m.foo(1,2,3)
+		assert_nil( tmp )
+		mc:verify()
+	end
+	function call_anyarg_test ()
+		m.foo(1,mc.ANYARG,3)
+		mc:replay()
+		local tmp = m.foo(1,2,3)
+		mc:verify()
+	end
+	function call_anyargs_test ()
+		m.foo(mc.ANYARGS)
+		mc:replay()
+		local tmp = m.foo(1,2,3)
+		mc:verify()
+	end
+	function call_anyargs_bad_fails_test ()
+		local ok, err = pcall( function() m.foo(mc.ANYARGS, 1) end )
+		assert_false( ok, "ANYARGS misused" )
+		assert_match( "ANYARGS not at end", err )
+	end
+	function call_return_test ()
+		m.foo(1,2,3) ;mc:returns( 0, 9 )
+		mc:replay()
+		local tmp1, tmp2 = m.foo(1,2,3)
+		assert_equal( 0, tmp1 )
+		assert_equal( 9, tmp2 )
+		mc:verify()
+	end
+	function call_wrong_name_fails_test ()
+		m.foo(1,2,3) ;mc:returns( 0 )
+		mc:replay()
+		local ok, err = pcall( function() m:bar(1,2,3) end )
+		assert_false( ok, "replay wrong index" )
+		assert_match( "Unexpected action index bar", err )
+	end
+	function call_wrong_arg_fails_test ()
+		m.foo(1,2,3) ;mc:returns( 0 )
+		mc:replay()
+		local ok, err = pcall( function() m.foo(1) end )
+		assert_false( ok, "replay succeeded" )
+		assert_match( "Unexpected action call foo", err )
+	end
+	function call_throws_error_test ()
+		m.boo('Ba') ;mc:error( "Call throws error" )
+		mc:replay()
+		local ok, err = pcall( function() m.boo('Ba') end )
+		assert_false( ok, "did not throw error" )
+		assert_match( "Call throws error", err )
+	end
+@
+
+Record Phase
+============
+
+<<Class Callable.record call>>=
+	function Callable.record:__call (...)
+		local index_action = self.action
+		local m = index_action.mock
+		local mc = mock_controller_map[m]
+		assert( mc.is_recording, "client uses cached callable from recording" )
+		mc:make_callable( index_action )
+		mc:add_action( Action.call:new( m, index_action.key, ... ))
+	end
+
+<<Class Action.call method new>>=
+	function Action.call:new (m, key, ...)
+		local a = Action.generic_call.new( self, m, ... )
+		a.key = key
+		return a
+	end
+@
+
+Replay Phase
+============
+
+<<Class Callable.replay call>>=
+	function Callable.replay:__call (...)
+		local index_action = self.action
+		local m = index_action.mock
+		local mc = mock_controller_map[m]
+		local call_action = mc:lookup( Action.call:new( m, index_action.key, ... ))
+		mc:replay_action( call_action )
+		if call_action.throws_error then
+			error( call_action.errorvalue, 2 )
+		end
+		return call_action:get_returnvalue()
+	end
+
+<<Unit test for class Action.call method match>>=
+	function call_match_test ()
+		local m = {}
+		local a = Action.call:new( m, 'foo', 4, 'bb' )
+		assert_true(  a:match( Action.call:new( m, 'foo', 4, 'bb' )))
+		assert_false( a:match( Action.call:new( {}, 'foo', 4, 'bb' )))
+		assert_false( a:match( Action.call:new( m, 'bar', 4, 'bb' )))
+		assert_false( a:match( Action.call:new( m, 'foo', 1, 'bb' )))
+		assert_false( a:match( Action.call:new( m, 'foo', 4, 'b' )))
+		assert_false( a:match( Action.call:new( m, 'foo', 4, 'bb', 'cc' )))
+	end
+
+<<Class Action.call method match>>=
+	function Action.call:match (q)
+		if not Action.generic_call.match( self, q )  then return false end
+		if self.key ~= q.key                         then return false end
+		return true
+	end

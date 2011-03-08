@@ -1,0 +1,65 @@
+Lua Easy Mock -- LeMock
+Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+See terms in file COPYRIGHT, or at http://lemock.luaforge.net
+@
+
+<<Userguide Section Times>>=
+== Times ==
+
+The default for a recorded action is to be replayed exactly once.
+``times(2)`` changes that to exactly two times, and ``times(1,2)`` changes
+it to at least one time and at most two times.
+
+When the action has been replayed the least count times it is
+//satisfied//, which means verify will not complain about it, and it no
+longer blocks actions that depend on this action from being replayed. If
+the least count is zero the action is automatically satisfied and need not
+be replayed at all, i.e., it is optional.
+
+When the action has been replayed the most count times it will not replay
+any more. The most replay count can be set to infinity (``math.huge`` or
+``1/0``), in which case the action will never stop replaying.
+
+``anytimes()`` can be used as an alias for ``times(0,1/0)``, and
+``atleastonce()`` can be used as an alias for ``times(1,1/0)``.
+
+=== Example ===
+
+This example tests that method update is called at least once.
+
+```
+<<Userguide Example times>>
+```
+@
+
+<<Userguide Example times>>=
+require 'lemock'
+local mc = lemock.controller()
+local con = mc:mock()
+
+con:log(mc.ANYARGS) ;mc                :anytimes()
+con:update('x',3)   ;mc :returns(true) :atleastonce()
+
+mc:replay()
+require 'foo'
+local watcher = foo.mk_watcher( con )
+watcher:set( 'x', 3 )
+
+mc:verify()
+@
+
+<<Unit test for Userguide Example times>>=
+	function example_times_test ()
+		package.loaded.foo = nil
+		package.preload.foo = function ()
+			foo = {}
+			function foo.mk_watcher ( con )
+				local o = {}
+				function o:set ( key, val )
+					con:update( key, val )
+				end
+				return o
+			end
+		end
+		<<Userguide Example times>>
+	end

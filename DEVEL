@@ -1,0 +1,57 @@
+LeMock Developer Notes
+
+
+LeMock is implemented in Lua 5.1, but its source code is written as
+literate documents, and usees the tool noweb to generate the .lua files.
+The distributed source archive includes all the tangled files in the build
+directory, to avoid dependending on noweb for installation.
+
+The source is contained in the src directory in the form of literate
+documents. To extract (tangle) the final files from the sources, the tool
+[noweb http://www.cs.tufts.edu/~nr/noweb/] is needed.
+
+The source files are meant to be tangled together all at once, because the
+contents of a target file can be spread over several source files. The
+target files are all the chunk names that are roots. These can be found
+with noroots in the noweb toolbox. To automate the tangle process, there is
+a custom script named autotangle in the tools directory. This script finds
+all the target file names and tangles them in the current directory,
+creating subdirectories as needed. The script is written for yet another
+obscure tool, [rc http://www.libra-aries-books.co.uk/software/rc] [1]. It
+is probably easy to port the short rc script to your favourit language. It
+is invoked (in rc syntax) as:
+
+``` ../tools/autotangle `{find ../src -name '*.nw'}
+
+which means it wants all (recursively) .nw files in the src directory as
+arguments.
+
+The documentation is written in [txt2tags http://txt2tags.sourceforge.net/],
+which can generate HTML among many other formats. The README, HISTORY,
+COPYRIGHT, and this DEVEL text file are written as simple txt2tags
+documents to remain readable as is. The .nw source files define wrapper
+txt2tags documents for the web pages, which use txt2tags' include mechanism
+to include the actual txt2tags files. The user guide is defined in the .nw
+sources as a separate txt2tags document, so it can be easily generated as a
+LaTeX document or Unix man page, but it too is included in a wrapper
+txt2tags document when generating the web pages.
+
+The building of the web pages is done with
+[mk http://en.wikipedia.org/wiki/Mk_%28software%29], a Unix port of the
+Plan9 make tool. (The mk files uses rc syntax.)
+
+A set of unit tests (defined in the .nw source) can be run with
+[lunit http://www.nessie.de/mroth/lunit/index.html] with the command:
+
+``` lunit unit/*.lua
+
+A program like [luacov http://luacov.luaforge.net/] can be used to check
+the coverage of the unit tests.
+
+
+--------------------
+== Footnotes ==
+: [1]
+  I use Byron's Unix port, which syntax is extended and incompatible with
+  the original (and other ports).
+:

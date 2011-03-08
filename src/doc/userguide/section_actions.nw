@@ -1,0 +1,34 @@
+Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+See terms in file COPYRIGHT, or at http://lemock.luaforge.net
+@
+
+<<Userguide Section Actions>>=
+== Actions ==
+
+Mock objects detect four types of actions: assignment, indexing, method
+call, and self call. During replay an action will only match if it is the
+very same action, that is, the same type of action performed on the same
+mock object with all the same arguments. There are however
+[special arguments #anyargs] that can be used during recording.
+
+```
+<<Userguide Example actions>>
+```
+@
+
+<<Userguide Example actions>>=
+require 'lemock'
+local mc = lemock.controller()
+local m = mc:mock()
+
+m.x = 17    -- assignment
+r = m.x     -- indexing
+m.x(1,2,3)  -- method call
+m:x(1,2,3)  -- method call
+m(1,2,3)    -- self call
+@
+
+<<Unit test for Userguide Example actions>>=
+	function actions_test ()
+		<<Userguide Example actions>>
+	end

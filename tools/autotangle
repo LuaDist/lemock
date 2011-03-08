@@ -1,0 +1,28 @@
+#!/usr/bin/env rc
+
+nl='
+'
+tf=`tempfile
+
+for (f in ``($nl){noroots $* |sed 's/^<<\(.*\)>>$/\1/'}) {
+  if (~ $f *' '*) {
+    echo >[1=2] 'Skipping bad root <<'^$^f^'>>'
+  } else {
+    d=`{dirname $f} if (! test -d $d) mkdir -p $d
+    switch (`{basename $f}) {
+      case *.c *.h;   o=(-L'#line %L "%F"%N')
+      case *.lua;     o=(-L'-- %F:%L%N')
+      case *.sh;      o=(-L'# %F:%L%N')
+      case mkfile;    o=(-t8)
+      case *;         o=()
+    }
+    notangle $o -R$f $* >$tf
+    if (! cmp -s $tf $f) {
+      echo Updating $f
+      rm -f $f
+      cat $tf > $f
+      chmod a-w $f
+    }
+  }
+}
+rm $tf

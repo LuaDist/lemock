@@ -1,0 +1,136 @@
+Lua Easy Mock -- LeMock
+Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+@
+
+The Index Action
+################
+
+The index action can either be "called" (via the returned Callable) or be
+given a return value, or neither in which case it will return nil during
+replay.
+
+<<Unit test for module mock index>>=
+	function index_test ()
+		local tmp = m.foo
+		mc:replay()
+		local tmp = m.foo
+		assert_nil( tmp )
+		mc:verify()
+	end
+	function index_returns_test ()
+		local tmp = m.foo ;mc:returns( 1 )
+		mc:replay()
+		local tmp = m.foo
+		assert_equal( 1, tmp )
+		mc:verify()
+	end
+	function index_wrong_key_fails_test ()
+		local tmp = m.foo ;mc:returns( 1 )
+		mc:replay()
+		local ok, err = pcall( function() local tmp = m.bar end )
+		assert_false( ok, "replay succeeded" )
+		assert_match( "Unexpected action index bar", err )
+	end
+	function index_throws_error_test ()
+		local tmp = m.foo ;mc:error( "Index throws error" )
+		mc:replay()
+		local ok, err = pcall( function() tmp = m.foo end )
+		assert_false( ok, "did not throw error" )
+		assert_match( "Index throws error", err )
+	end
+@
+
+Record Phase
+============
+
+<<Class Mock.record index>>=
+	function Mock.record:__index (key)
+		local mc = mock_controller_map[self]
+		local action = Action.index:new( self, key )
+		mc:add_action( action )
+		return Callable.record:new( action )
+	end
+@
+
+Action new
+----------
+
+<<Unit test for class Action.index method new>>=
+	function create_index_action_test ()
+		local m = {}
+		local a = Action.index:new( m, 'foo' )
+		assert_equal( m, a.mock )
+		assert_equal( 'foo', a.key )
+	end
+
+<<Class Action.index method new>>=
+	function Action.index:new (m, key)
+		local a = Action.generic.new( self, m )
+		a.key = key
+		return a
+	end
+@
+
+Action set_returnvalue
+----------------------
+
+<<Unit test for class Action.index method set_returnvalue>>=
+	function index_returnvalue_test ()
+		local a = Action.index:new( {}, -3 )
+		a:set_returnvalue( 'foo' )
+		assert_equal( 'foo', a:get_returnvalue() )
+	end
+
+<<Class Action.index method set_returnvalue>>=
+	function Action.index:set_returnvalue (v)
+		self.returnvalue = v
+		self.has_returnvalue = true
+	end
+@
+
+Replay Phase
+============
+
+<<Class Mock.replay index>>=
+	function Mock.replay:__index (key)
+		local mc = mock_controller_map[self]
+		local index_action = mc:lookup( Action.index:new( self, key ))
+		mc:replay_action( index_action )
+		if index_action.throws_error then
+			error( index_action.errorvalue, 2 )
+		end
+		if index_action.is_callable then
+			return Callable.replay:new( index_action )
+		else
+			return index_action:get_returnvalue()
+		end
+	end
+@
+
+Action match
+------------
+
+<<Unit test for class Action.index method match>>=
+	function index_match_test ()
+		local m = {}
+		local a = Action.index:new( m, -1 )
+		assert_true(  a:match( Action.index:new( m, -1 )))
+		assert_false( a:match( Action.index:new( {}, -1 )))
+		assert_false( a:match( Action.index:new( m, 'a' )))
+	end
+
+<<Class Action.index method match>>=
+	function Action.index:match (q)
+		if not Action.generic.match( self, q )  then return false end
+		if self.key ~= q.key                    then return false end
+		return true
+	end
+@
+
+Action get_returnvalue
+----------------------
+
+<<Class Action.index method get_returnvalue>>=
+	function Action.index:get_returnvalue ()
+		return self.returnvalue
+	end

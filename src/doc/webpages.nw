@@ -1,0 +1,297 @@
+Lua Easy Mock -- LeMock
+Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+See terms in file COPYRIGHT, or at http://lemock.luaforge.net
+@
+
+The sources for the web pages are written as independent t2t documents. To
+form a cohesive web "site", the pages are included in special wrapper t2t
+documents, which use a different set of configurations, and add a header, a
+navigation menu bar, and a footer. The wrappers are tangled into the www
+directory, the userguide is tangled into the build directory, and the other
+sources are unique files in the distribution root directory.
+
+<<mkfile>>=
+MKSHELL = rc
+
+all:V: htdocs
+
+wrappers  = `{find www -name '*.t2t'}
+htmls = ${wrappers:www/%.t2t=htdocs/%.html}
+
+htdocs:V: $htmls
+
+$htmls: www/menubar.html
+htdocs/COPYRIGHT.html: ../COPYRIGHT
+htdocs/DEVEL.html:     ../DEVEL
+htdocs/HISTORY.html:   ../HISTORY
+htdocs/README.html:    ../README
+
+htdocs/%.html: www/%.t2t
+	txt2tags -t html -i www/$stem.t2t -o $target
+
+htdocs/userguide.html: www/userguide.t2t userguide.t2t
+	txt2tags -t html --toc --toc-level 2 -i www/userguide.t2t -o $target
+@
+
+== Wrappers ==
+
+The wrappers assume the source is tangled in a subdirectory, so ../../ is
+the path to the root.
+
+The ID of each page is changed to something unique, so the navigation menu
+can identify them.
+
+<<www/README.t2t>>=
+<<Webpage head>>
+%!postproc(html): 'ID="body"' 'ID="page-README"'
+<<Webpage main menu>>
+= Readme =
+%!include: ../../README
+<<Webpage foot>>
+@
+
+(No footer on copyright page!)
+
+<<www/COPYRIGHT.t2t>>=
+<<Webpage head>>
+%!postproc(html): 'ID="body"' 'ID="page-COPYRIGHT"'
+<<Webpage main menu>>
+= License =
+%!include: ../../COPYRIGHT
+@
+
+<<www/HISTORY.t2t>>=
+<<Webpage head>>
+%!postproc(html): 'ID="body"' 'ID="page-HISTORY"'
+<<Webpage main menu>>
+= History =
+%!include: ../../HISTORY
+<<Webpage foot>>
+@
+
+<<www/DEVEL.t2t>>=
+<<Webpage head>>
+%!postproc(html): 'ID="body"' 'ID="page-DEVEL"'
+<<Webpage main menu>>
+= Developer Notes =
+%!include: ../../DEVEL
+<<Webpage foot>>
+@
+
+(The user guide is tangled into the build directory.)
+
+<<www/userguide.t2t>>=
+<<Webpage head>>
+%!postproc(html): 'ID="body"' 'ID="page-userguide"'
+<<Webpage main menu>>
+%%toc
+%!include: ../userguide.t2t
+<<Webpage foot>>
+@
+
+The index file is just an empty file with the navigation menu. This is
+stupid. FIXME!
+
+<<www/index.t2t>>=
+<<Webpage head>>
+%!postproc(html): 'ID="body"' 'ID="page-index"'
+<<Webpage main menu>>
+@
+
+== Header and Footer ==
+
+The header contains the page's title (all pages get the same title), and
+sets up the configuration. The footer just contains the date for when the
+page was generated.
+
+<<Webpage head>>=
+LeMock
+
+
+%!includeconf: config.rc
+<<Doc reference preprocs>>
+@
+
+<<Webpage foot>>=
+--------------------
+%%Date(%Y-%m-%d)
+@
+
+Use css for layout and navigation menu.
+
+<<www/config.rc>>=
+%!options: --no-rc
+%!style(html): style.css
+%!options(html): --css-sugar 
+@
+
+<<htdocs/style.css>>=
+<<Webpage css>>
+<<Webpage css menu>>
+@
+
+Some t2t pages are written with the intent that they should work as plain
+text documents, and so they refer to other files by name. In the web pages
+real links are preferred, but the words README and DEVEL are too common, so
+a special trick with a trailing underscore is used.
+
+<<Doc reference preprocs>>=
+%!preproc: COPYRIGHT_ "[COPYRIGHT COPYRIGHT.html]"
+%!preproc: DEVEL_     "[DEVEL DEVEL.html]"
+%!preproc: "build/htdocs/userguide.html" "[the user guide userguide.html]"
+@
+
+== Style Sheet ===
+
+<<Webpage css>>=
+	<<Webpage css page>>
+	<<Webpage css title>>
+	<<Webpage css code>>
+	<<Webpage css toc>>
+	<<Webpage css history>>
+
+<<Webpage css page>>=
+	body {
+		color:            #181818;
+		background-color: #E0E4F0;
+		font:             normal 10pt sans-serif;
+		max-width:        30em;
+		margin:           25pt;
+	}
+	.body h1 {
+		margin:           2em 0em 0em 0em;
+		font-size:        14pt;
+	}
+	.body h2 {
+		margin:           1.5em 0em 0em 0em;
+		font-size:        12pt;
+	}
+	.body h3 {
+		margin:           1em 0em 0em 0em;
+		font-size:        10pt;
+	}
+	.body p, .body ul, .body ol {
+		margin-top:       0.5em;
+	}
+	.body li {
+		margin-top:       0.5em;
+	}
+	a {
+		text-decoration:  none;
+	}
+	hr {
+		margin-top:       3em;
+	}
+
+<<Webpage css title>>=
+	.header h1 {
+		text-align:       center;
+		padding:          0.3em;
+		border:           1pt solid black;
+	}
+
+<<Webpage css code>>=
+	code, pre {
+		font-family:      fixed;
+		font-style:       normal;
+		font-size:        9pt;
+		line-height:      9pt;
+		background-color: #E8ECF8;
+	}
+	pre {
+		padding:          2pt;
+	}
+
+<<Webpage css toc>>=
+	div.toc {
+		margin-top:       3em;
+		line-height:      6pt;
+	}
+	.toc ul {
+		padding-left:     1.6em;
+		margin:           0em;
+		line-height:      10pt;
+	}
+	.toc li {
+		margin:           0em;
+		padding:          0em;
+		list-style-type:  none;
+	}
+	.toc a {
+		color:            #091;
+	}
+
+<<Webpage css history>>=
+	#page-HISTORY DL DT {
+		font-weight:      bold;
+		margin-top:       2em;
+	}
+	#page-HISTORY DL DD UL {
+		margin-top:       0pt;
+		padding-left:     0pt;
+	}
+@
+
+== Navigation Menu Bar ==
+
+The navigation menu bar is implemented with css.
+
+<<Webpage main menu>>=
+%!include(html): ''menubar.html''
+@
+
+<<www/menubar.html>>=
+<ul id="main_menu">
+  <li id="main_menu-README"><a    href="README.html"   >Readme</a></li>
+  <li id="main_menu-COPYRIGHT"><a href="COPYRIGHT.html">License</a></li>
+  <li id="main_menu-userguide"><a href="userguide.html">Userguide</a></li>
+  <li id="main_menu-HISTORY"><a   href="HISTORY.html"  >History</a></li>
+  <li id="main_menu-DEVEL"><a     href="DEVEL.html"    >Devel</a></li>
+</ul>
+@
+
+<<Webpage css menu>>=
+	#main_menu {
+		margin:  0;
+		padding: 0;
+	}
+	#main_menu li {
+		margin:  0;
+		padding: 0;
+		display: inline;
+	}
+	#main_menu a {
+		padding:    3px 3px 2px 4px;
+		text-decoration:none;
+		font:bold 8pt/8pt Arial, Helvetica, sans-serif;
+		border:       1px solid #000;
+	}
+	#main_menu a:link,
+	#main_menu a:visited {
+		color:      #fff;
+		background: #777;
+	}
+	#main_menu a:hover {
+		color:      #000;
+		background: #777;
+	}
+	#page-README    #main_menu-README    a,
+	#page-COPYRIGHT #main_menu-COPYRIGHT a,
+	#page-userguide #main_menu-userguide a,
+	#page-HISTORY   #main_menu-HISTORY   a,
+	#page-DEVEL     #main_menu-DEVEL     a {
+		color:      #000;
+		background: #aaa;
+	}
+	#page-README    #main_menu-README    a:hover,
+	#page-COPYRIGHT #main_menu-COPYRIGHT a:hover,
+	#page-userguide #main_menu-userguide a:hover,
+	#page-HISTORY   #main_menu-HISTORY   a:hover,
+	#page-DEVEL     #main_menu-DEVEL     a:hover {
+		color:      #000;
+		background: #aaa;
+	}
+	#nav a:active {
+		color:      #000;
+		background: #aaa;
+	}

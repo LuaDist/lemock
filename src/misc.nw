@@ -1,0 +1,30 @@
+Lua Easy Mock -- LeMock
+Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+See terms in file COPYRIGHT, or at http://lemock.luaforge.net
+@
+
+<<Lua file blurb>>=
+	------ THIS FILE IS TANGLED FROM LITERATE SOURCE FILES ------
+	-- Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+	-- See terms in file COPYRIGHT, or at http://lemock.luaforge.net
+
+<<Simple Fake_action class>>=
+	Fake_action = class()
+	function Fake_action:new (x)
+		local a = object(Fake_action)
+		a.x = x
+		return a
+	end
+	function Fake_action:match (q)
+		return self.x < q.x
+	end
+	function Fake_action:is_expected ()
+		return true
+	end
+	function Fake_action:tostring ()
+		return '<faked action>'
+	end
+	function Fake_action:blocks ()
+		return function () end
+	end
+	Fake_action.depends = Fake_action.blocks

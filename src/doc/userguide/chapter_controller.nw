@@ -1,0 +1,23 @@
+Lua Easy Mock -- LeMock
+Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+See terms in file COPYRIGHT, or at http://lemock.luaforge.net
+@
+
+<<Userguide Chapter The Controller>>=
+= The Controller =
+
+The controller's main purpose is to store the recorded actions, create mock
+objects, switch to replay mode, and verify the completion of the replay
+phase. But it is also needed to set or change special action attributes
+during recording.
+
+It is possible, although doubtfully useful, to use several controllers in
+parallel during a single unit test. Each controller maintains its own
+action list and state, and mock objects remember which controller they
+belong to.
+
+<<Userguide Section Returns & Error>>
+<<Userguide Section Label & Depend>>
+<<Userguide Section Times>>
+<<Userguide Section Close>>
+@

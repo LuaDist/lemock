@@ -1,0 +1,67 @@
+Lua Easy Mock -- LeMock
+Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+See terms in file COPYRIGHT, or at http://lemock.luaforge.net
+@
+
+<<Userguide Chapter Tricks>>=
+= Tricks =
+
+Mock objects are completely empty, and do not contain any methods or
+properties of their own. If they did, that would risk shadowing a name of a
+simulated object's method or property. There is however nothing preventing
+users from defining methods and properties in mock objects. This way mock
+objects can be turned into stubs, or a kind of mock–stub hybrid.
+
+<<Userguide Section Overloading>>
+@
+
+<<Userguide Section Overloading>>=
+== Method Overloading ==
+
+Lua does not support method overloading, but it can be (and sometimes is)
+implemented manually by testing of function arguments. This presents a
+problem to LeMock, because it matches exact arguments, and anyargs in not
+sufficient. In this case the mock object can be extended with a dispatcher
+function.
+
+=== Example ===
+
+This example shows a mock object with an overloaded add function. The stub
+function can not be defined in the usual way, because that would record an
+assignment action; it needs to be defined with //rawset//.
+
+```
+<<Userguide Example overloading>>
+```
+@
+
+<<Userguide Example overloading>>=
+require 'lemock'
+local mc = lemock.controller()
+local m = mc:mock()
+
+do
+local function add (a, b)
+    if type(a) == 'number' then
+        return m.add_number(a, b)
+    else
+        return m.add_string(a, b)
+    end
+end
+rawset( m, 'add', add ) -- not recorded
+end -- do
+
+m.add_number(1, 2)         ;mc :returns(3)
+m.add_string('foo', 'bar') ;mc :returns('foobar')
+
+mc:replay()
+assert_equal( 3, m.add(1, 2) )
+assert_equal( 'foobar', m.add('foo', 'bar') )
+
+mc:verify()
+@
+
+<<Unit test for Userguide Example overloading>>=
+	function overloading_test ()
+		<<Userguide Example overloading>>
+	end

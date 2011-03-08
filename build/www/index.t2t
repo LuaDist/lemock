@@ -1,0 +1,9 @@
+LeMock
+
+
+%!includeconf: config.rc
+%!preproc: COPYRIGHT_ "[COPYRIGHT COPYRIGHT.html]"
+%!preproc: DEVEL_     "[DEVEL DEVEL.html]"
+%!preproc: "build/htdocs/userguide.html" "[the user guide userguide.html]"
+%!postproc(html): 'ID="body"' 'ID="page-index"'
+%!include(html): ''menubar.html''

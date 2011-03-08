@@ -1,0 +1,80 @@
+Lua Easy Mock -- LeMock
+Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+@
+
+Class Action.generic_call
+#########################
+
+The generic_call action class implements the common tasks of the two
+different call action types.
+
+There are two types of calls in Lua: a call of a function, and a call of
+the [[__call]] meta method for something else (e.g., a table). It is
+normally not necessary to differentiate the two types in the mock, because
+only the behavior is simulated so it does not matter what the simulated
+object would return. The mock always returns a Callable, which records a
+call action. The exception is when the mock object itself is called, which
+records a selfcall action.
+
+Note: a special case is if the mock contains another mock that can be
+called. This is awkward, but possible, to simulate by first referencing the
+inner mock object from the outer (an index action), and then recording the
+inner mock object as the returned value of that index action, and finally
+calling the second mock object.
+
+
+new
+---
+
+This method is extended by the concrete Action classes.
+
+<<Class Action.generic_call method new>>=
+	function Action.generic_call:new (m, ...)
+		local a = Action.generic.new( self, m )
+		a.argv   = Argv:new(...)
+		return a
+	end
+@
+
+match
+-----
+
+This method is extended by the concrete Action classes.
+
+<<Class Action.generic_call method match>>=
+	function Action.generic_call:match (q)
+		if not Action.generic.match( self, q )  then return false end
+		if not self.argv:equal( q.argv )        then return false end
+		return true
+	end
+@
+
+set_returnvalue
+---------------
+
+<<Class Action.generic_call method set_returnvalue>>=
+	function Action.generic_call:set_returnvalue (...)
+		self.returnvalue = Argv:new(...)
+		self.has_returnvalue = true
+	end
+@
+
+get_returnvalue
+---------------
+
+<<Unit test for class Action.generic_call method get_returnvalue>>=
+	function generic_call_set_and_get_returnvalue_test ()
+		local a = Action.generic_call:new()
+		assert_equal( 0, select('#', a:get_returnvalue() ))
+		a:set_returnvalue( nil, false )
+		local r1, r2 = a:get_returnvalue()
+		assert_equal( nil, r1 )
+		assert_equal( false, r2 )
+	end
+
+<<Class Action.generic_call method get_returnvalue>>=
+	function Action.generic_call:get_returnvalue ()
+		if self.has_returnvalue then
+			return self.returnvalue:unpack()
+		end
+	end

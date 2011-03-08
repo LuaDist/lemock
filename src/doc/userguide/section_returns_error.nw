@@ -1,0 +1,38 @@
+Lua Easy Mock -- LeMock
+Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+See terms in file COPYRIGHT, or at http://lemock.luaforge.net
+@
+
+<<Userguide Section Returns & Error>>=
+== Returns & Error ==
+
+The by far most useful special action attribute is the return value.
+Indexing actions can return a single value, while call actions and self
+call actions can return a list of values. The return value is set with the
+//returns// method, and it is an error to set the return value twice for
+the same action.
+
+For purposes of unit testing it is often useful to simulate errors. All
+actions can raise an error, and return an error value (usually a string).
+The return value is set with the //error// method. An action can not have
+both a return value and raise an error.
+
+=== Example ===
+```
+<<Userguide Example returns & error>>
+```
+@
+
+<<Userguide Example returns & error>>=
+require 'lemock'
+local mc = lemock.controller()
+local m = mc:mock()
+
+m:foo(17)  ;mc :returns(nil, "index out of range")
+m:bar(-1)  ;mc :error("invalid index")
+@
+
+<<Unit test for Userguide Example returns & error>>=
+	function returns_error_test ()
+		<<Userguide Example returns & error>>
+	end

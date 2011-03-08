@@ -1,0 +1,105 @@
+Lua Easy Mock -- LeMock
+Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+@
+
+Class Inheritance
+=================
+
+      ABSTRACT         CONCRETE
+ 
+ generic
+  |
+  `------------------  newindex
+  |
+  `------------------  index
+  |
+  `--  generic_call
+        |
+        `------------  call
+        |
+        `------------  selfcall
+
+
+<<Class Action>>=
+	Action = {}
+	
+	-- abstract
+	<<Class Action.generic>>
+	<<Class Action.generic_call>>
+	
+	-- concrete
+	<<Class Action.call>>
+	<<Class Action.index>>
+	<<Class Action.newindex>>
+	<<Class Action.selfcall>>
+@
+
+Abstract Action Classes
+=======================
+
+<<Class Action.generic>>=
+	Action.generic = class()
+	
+	<<Class Action.generic method add_close>>
+	<<Class Action.generic method add_depend>>
+	<<Class Action.generic method add_label>>
+	<<Class Action.generic method assert_satisfied>>
+	<<Class Action.generic method blocks>>
+	<<Class Action.generic method closes>>
+	<<Class Action.generic method depends>>
+	<<Class Action.generic method has_label>>
+	<<Class Action.generic method is_expected>>
+	<<Class Action.generic method is_satisfied>>
+	<<Class Action.generic method match>>
+	<<Class Action.generic method new>>
+	<<Class Action.generic method set_times>>
+
+
+<<Class Action.generic_call>>=
+	Action.generic_call = class( Action.generic )
+	
+	Action.generic_call.can_return = true
+	<<Class Action.generic_call method get_returnvalue>>
+	<<Class Action.generic_call method set_returnvalue>>
+	
+	<<Class Action.generic_call method match>>
+	<<Class Action.generic_call method new>>
+@
+
+Concrete Action Classes
+=======================
+
+<<Class Action.newindex>>=
+	Action.newindex = class( Action.generic )
+	
+	<<Class Action.newindex method match>>
+	<<Class Action.newindex method new>>
+	<<Class Action.newindex method tostring>>
+
+
+<<Class Action.index>>=
+	Action.index = class( Action.generic )
+	
+	Action.index.can_return = true
+	<<Class Action.index method get_returnvalue>>
+	<<Class Action.index method set_returnvalue>>
+	
+	<<Class Action.index method match>>
+	<<Class Action.index method new>>
+	<<Class Action.index method tostring>>
+
+
+<<Class Action.call>>=
+	Action.call = class( Action.generic_call )
+	
+	<<Class Action.call method match>>
+	<<Class Action.call method new>>
+	<<Class Action.call method tostring>>
+
+
+<<Class Action.selfcall>>=
+	Action.selfcall = class( Action.generic_call )
+	
+	<<Class Action.selfcall method match>>
+	<<Class Action.selfcall method new>>
+	<<Class Action.selfcall method tostring>>

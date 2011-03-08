@@ -1,0 +1,109 @@
+Lua Easy Mock -- LeMock
+Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+@
+
+The Newindex Action
+###################
+
+<<Unit test for module mock newindex>>=
+	function newindex_test ()
+		m.foo = 1
+		mc:replay()
+		m.foo = 1
+		mc:verify()
+	end
+	function newindex_anyarg_test ()
+		m.foo = mc.ANYARG
+		mc:replay()
+		m.foo = 1
+		mc:verify()
+	end
+	function newindex_wrong_key_fails_test ()
+		m.foo = 1
+		mc:replay()
+		local ok, err = pcall( function() m.bar = 1 end )
+		assert_false( ok, "replay succeeded" )
+		assert_match( "Unexpected action newindex", err )
+	end
+	function newindex_wrong_value_fails_test ()
+		m.foo = 1
+		mc:replay()
+		local ok, err = pcall( function() m.foo = 0 end )
+		assert_false( ok, "replay succeeded" )
+		assert_match( "Unexpected action newindex foo", err )
+	end
+	function newindex_throws_error_test ()
+		m.foo = 1 ;mc:error( "newindex throws error" )
+		mc:replay()
+		local ok, err = pcall( function() m.foo = 1 end )
+		assert_false( ok, "did not throw error" )
+		assert_match( "newindex throws error", err )
+	end
+@
+
+Record Phase
+============
+
+<<Class Mock.record newindex>>=
+	function Mock.record:__newindex (key, val)
+		local mc = mock_controller_map[self]
+		mc:add_action( Action.newindex:new( self, key, val ))
+	end
+
+<<Class Action.newindex method new>>=
+	function Action.newindex:new (m, key, val)
+		local a = Action.generic.new( self, m )
+		a.key    = key
+		a.val    = val
+		return a
+	end
+@
+
+Replay Phase
+============
+
+<<Class Mock.replay newindex>>=
+	function Mock.replay:__newindex (key, val)
+		local mc = mock_controller_map[self]
+		local newindex_action = mc:lookup( Action.newindex:new( self, key, val ))
+		mc:replay_action( newindex_action )
+		if newindex_action.throws_error then
+			error( newindex_action.errorvalue, 2 )
+		end
+	end
+
+<<Unit test for class Action.newindex method match>>=
+	function newindex_match_test ()
+		local m = {}
+		local a = Action.newindex:new( m, 'foo', 17 )
+		assert_true(  a:match( Action.newindex:new( m, 'foo', 17 )))
+		assert_false( a:match( Action.newindex:new( {}, 'foo', 17 )))
+		assert_false( a:match( Action.newindex:new( m, 'fo', 17 )))
+		assert_false( a:match( Action.newindex:new( m, 'foo', 7 )))
+	end
+	function newindex_anyarg_test ()
+		local m = {}
+		local a = Action.newindex:new( m, 'foo', Argv.ANYARG )
+		local b = Action.newindex:new( m, 'foo', 33 )
+		local c = Action.newindex:new( m, 'foo', nil )
+		assert_true( a:match(b) )
+		assert_true( b:match(a) )
+		assert_true( a:match(c) )
+		assert_true( c:match(a) )
+	end
+	function newindex_NaN_test ()
+		local m = {}
+		local nan = 0/0
+		local a = Action.newindex:new( m, m, nan )
+		assert_true( a:match( Action.newindex:new( m, m, nan )))
+	end
+
+<<Class Action.newindex method match>>=
+	function Action.newindex:match (q)
+		if not Action.generic.match( self, q )  then return false end
+		if self.key ~= q.key                    then return false end
+		if not value_equal( self.val, q.val )
+		   and self.val ~= Argv.ANYARG
+		   and q.val    ~= Argv.ANYARG          then return false end
+		return true
+	end

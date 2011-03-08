@@ -1,0 +1,65 @@
+Lua Easy Mock -- LeMock
+Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+See terms in file COPYRIGHT, or at http://lemock.luaforge.net
+@
+
+class and object
+----------------
+
+These functions are mostly to enhance the reading of the code.
+
+<<Helper function class and object>>=
+	function object (class)
+		return setmetatable( {}, class )
+	end
+	function class (parent)
+		local c = object(parent)
+		c.__index = c
+		return c
+	end
+@
+
+value_equal
+-----------
+
+NaN is always numerically not-equal everything, but for arguments and
+return values we want a symbolic comparison.
+
+<<Helper function value_equal>>=
+	function value_equal (a, b)
+		if a == b then return true end
+		if a ~= a and b ~= b then return true end -- NaN == NaN
+		return false
+	end
+@
+
+Sets
+----
+
+Sets are used in Actions to store labels and dependencies, which are
+usually very short, and often not used at all, so it is worth some extra
+trouble to optimize for size.
+
+The implementation uses arrays, and no array (nil) can represent the empty
+set.
+
+<<Helper function add_to_set and elements_of_set>>=
+	function add_to_set (o, setname, element)
+		if not o[setname] then
+			o[setname] = {}
+		end
+		local l = o[setname]
+		
+		for i = 1, #l do
+			if l[i] == element then return end
+		end
+		l[#l+1] = element
+	end
+	function elements_of_set (o, setname)
+		local l = o[setname]
+		local i = l and #l+1 or 0
+		return function ()
+			i = i - 1
+			if i > 0 then return l[i] end
+		end
+	end

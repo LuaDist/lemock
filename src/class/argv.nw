@@ -1,0 +1,11 @@
+Lua Easy Mock -- LeMock
+Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+@
+
+<<Class Argv>>=
+	Argv = class()
+	
+	<<Class Argv method equal>>
+	<<Class Argv method new>>
+	<<Class Argv method tostring>>
+	<<Class Argv method unpack>>

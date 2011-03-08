@@ -1,0 +1,13 @@
+Lua Easy Mock -- LeMock
+Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+@
+
+<<Class Mock>>=
+	<<Class Mock meta tables Mock.record and Mock.replay>>
+	
+	<<Class Mock.record index>>
+	<<Class Mock.record newindex>>
+	<<Class Mock.record selfcall>>
+	<<Class Mock.replay index>>
+	<<Class Mock.replay newindex>>
+	<<Class Mock.replay selfcall>>

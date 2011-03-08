@@ -1,0 +1,20 @@
+MKSHELL = rc
+
+all:V: htdocs
+
+wrappers  = `{find www -name '*.t2t'}
+htmls = ${wrappers:www/%.t2t=htdocs/%.html}
+
+htdocs:V: $htmls
+
+$htmls: www/menubar.html
+htdocs/COPYRIGHT.html: ../COPYRIGHT
+htdocs/DEVEL.html:     ../DEVEL
+htdocs/HISTORY.html:   ../HISTORY
+htdocs/README.html:    ../README
+
+htdocs/%.html: www/%.t2t
+	txt2tags -t html -i www/$stem.t2t -o $target
+
+htdocs/userguide.html: www/userguide.t2t userguide.t2t
+	txt2tags -t html --toc --toc-level 2 -i www/userguide.t2t -o $target

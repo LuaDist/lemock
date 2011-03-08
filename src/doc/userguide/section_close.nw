@@ -1,0 +1,64 @@
+Lua Easy Mock -- LeMock
+Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+See terms in file COPYRIGHT, or at http://lemock.luaforge.net
+@
+
+<<Userguide Section Close>>=
+== Close ==
+
+Close can be used to simulate state changes in a limited way. When an
+action with a close statement is replayed for the first time, it will
+permanently block all labels in its close statement, so that actions with
+these labels no longer replays. This passes on matching to later actions in
+the action list, which may for example have different return values.
+
+The closing simply blocks the labels, and it has nothing to do with max
+replay counts or if closed actions have been satisfied or not. Closing an
+unsatisfied action however results in an immediate failure.
+
+=== Example ===
+
+This example tests that the dump function of module foo calls the myio
+functions in a correct order. The read function can be called any number of
+times, until it is closed by the close function.
+
+```
+<<Userguide Example close>>
+```
+@
+
+<<Userguide Example close>>=
+require 'lemock'
+local mc = lemock.controller()
+local myio = mc:mock()
+local fs   = mc:mock()
+
+myio.open('abc', 'r') ;mc :returns(fs)
+mc :label('open')
+
+fs:read(mc.ANYARG) ;mc :returns('data')
+mc :atleastonce() :label('read') :depend('open')
+
+fs:close() ;mc :returns(true)
+mc :depend('open') :close('read')
+
+mc:replay()
+require 'foo'
+foo.dump(myio, 'abc', 128)
+
+mc:verify()
+@
+
+<<Unit test for Userguide Example close>>=
+	function close_test ()
+		package.loaded.foo = nil
+		package.preload.foo = function ()
+			foo = {}
+			function foo.dump (xio, name, len)
+				local f = xio.open( name, 'r' )
+				f:read( len )
+				f:close()
+			end
+		end
+		<<Userguide Example close>>
+	end

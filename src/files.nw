@@ -1,0 +1,32 @@
+Lua Easy Mock -- LeMock
+Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+See terms in file COPYRIGHT, or at http://lemock.luaforge.net
+@
+
+<<lemock.lua>>=
+	<<Lua file blurb>>
+	
+	module( 'lemock', package.seeall )
+	_VERSION   = "LeMock 0.6"
+	_COPYRIGHT = "Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>"
+	
+	local class, object, qtostring, sfmt, add_to_set
+	local elements_of_set, value_equal
+	<<Helper function class and object>>
+	<<Helper function qtostring and sfmt>>
+	<<Helper function add_to_set and elements_of_set>>
+	<<Helper function value_equal>>
+	
+	<<Module mock private data mock_controller_map>>
+	
+	-- All the classes are private
+	local Action, Argv, Callable, Controller, Mock
+	<<Class Action>>
+	<<Class Argv>>
+	<<Class Callable>>
+	<<Class Controller>>
+	<<Class Mock>>
+	
+	<<Module mock function controller>>
+	
+	return _M

@@ -1,0 +1,87 @@
+Lua Easy Mock -- LeMock
+Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+See terms in file COPYRIGHT, or at http://lemock.luaforge.net
+@
+
+<<Userguide Chapter Introduction>>=
+= Introduction =
+<<Userguide Introduction>>
+
+=== Example ===
+
+This example tests that the insert_data function of the foo module handles
+a missing data base table gracefully.
+
+```
+<<Userguide Example simple>>
+```
+
+First a controller is created. Then three mock objects are created, one for
+the sqlite3 module, and two for objects returned by the (simulated) module.
+
+Then a preloader for the sqlite3 module is installed, which returns the
+sqlite3 mock object instead of the actual sqlite3 module.
+
+In the record phase the expected calls and their return values (or thrown
+errors) are recorded. The order is not significant, so this simplified test
+will not detect if the close method is called before the execute method.
+
+In the replay phase the tested module is loaded and executed. It will use
+the mock objects instead of the real data base, and if it makes any
+unrecorded calls, an error is thrown.
+
+The verify phase asserts that all recorded actions have been replayed. If
+the foo module for example forgets to call the close method, verify throws
+an error.
+
+@
+
+<<Userguide Example simple>>=
+-- Setup
+require 'lemock'
+local mc = lemock.controller()
+local sqlite3 = mc:mock()
+local env     = mc:mock()
+local con     = mc:mock()
+package.loaded.luasql = nil
+package.preload['luasql.sqlite3'] = function ()
+    luasql = {}
+    luasql.sqlite3 = sqlite3
+    return sqlite3
+end
+
+-- Record
+sqlite3()                 ;mc :returns(env)
+env:connect('/data/base') ;mc :returns(con)
+con:execute(mc.ANYARGS)   ;mc :error('LuaSQL: no such table')
+con:close()
+env:close()
+
+-- Replay
+mc:replay()
+require 'foo'
+local res = foo.insert_data(17)
+assert(res==false)
+
+--Verify
+mc:verify()
+@
+
+<<Unit test for Userguide Example simple>>=
+	function example_simple_test ()
+		package.loaded.foo = nil
+		package.preload.foo = function ()
+			foo = {}
+			q = require 'luasql.sqlite3'
+			function foo.insert_data()
+				local env = q()
+				local con = env:connect( '/data/base' )
+				local ok, err = pcall( con.execute, con, 'insert foo bar' )
+				con:close()
+				env:close()
+				return ok
+			end
+			return foo
+		end
+		<<Userguide Example simple>>
+	end

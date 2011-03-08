@@ -1,0 +1,13 @@
+Lua Easy Mock -- LeMock
+Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+@
+
+<<Class Callable>>=
+	Callable = {}
+	Callable.generic = class()
+	Callable.record  = class( Callable.generic )
+	Callable.replay  = class( Callable.generic )
+	
+	<<Class Callable.generic method new>>
+	<<Class Callable.record call>>
+	<<Class Callable.replay call>>

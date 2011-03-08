@@ -1,0 +1,22 @@
+LeMock History
+
+
+: 0.6
+  - Actions can be set to raise an error.
+  - //anytimes// and //atleastonce//.
+  - Fail immediately if an unsatisfied action is closed.
+  - Simplify semantics for Anyarg and Anyargs.
+  - Documentation.
+: 0.5
+  - Anyarg and Anyargs.
+  - Third rewrite (major refactoring).
+: 0.4
+  - Labels, dependencies, closes, and replay count limits.
+  - Allow attribute modifying controller methods to be chained.
+: 0.3
+  - Initial import.
+  - This is the second rewrite of the initial prototype. It handles recording
+    and replaying of actions with returnvalues, and verifies replay
+    completeness.
+
+

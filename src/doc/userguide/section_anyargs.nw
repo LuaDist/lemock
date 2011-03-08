@@ -1,0 +1,57 @@
+Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+See terms in file COPYRIGHT, or at http://lemock.luaforge.net
+@
+
+<<Userguide Section Anyargs>>=
+== Anyargs ==[anyargs]
+
+<<Userguide Anyargs>>
+
+Anyarg and anyargs are constants defined in the controller object.
+
+=== Example ===
+
+This example tests that the fetch_data function of module foo waits a while
+and retries when no data is immediately available, and that it updates the
+value of lasttime.
+
+```
+<<Userguide Example anyargs>>
+```
+@
+
+<<Userguide Example anyargs>>=
+require 'lemock'
+local mc = lemock.controller()
+local con = mc:mock()
+
+con:poll()           ;mc :returns(nil)
+con:sleep(mc.ANYARG)
+con:poll()           ;mc :returns('123.45')
+con.lasttime = mc.ANYARG
+
+mc:replay()
+require 'foo'
+local res = foo.fetch_data(con)
+assert( math.abs(res-123.45) < 0.0005 )
+
+mc:verify()
+@
+
+<<Unit test for Userguide Example anyargs>>=
+	function example_anyargs_test ()
+		package.loaded.foo = nil
+		package.preload.foo = function ()
+			foo = {}
+			function foo.fetch_data (con)
+				local res = con:poll()
+				while not res do
+					con:sleep( 10 )
+					res = con:poll()
+				end
+				con.lasttime = os.time()
+				return tonumber( res )
+			end
+		end
+		<<Userguide Example anyargs>>
+	end

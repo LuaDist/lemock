@@ -1,0 +1,30 @@
+Lua Easy Mock -- LeMock
+Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+@
+
+<<Class Controller>>=
+	Controller = class()
+	
+	-- Exported methods
+	<<Class Controller method close>>
+	<<Class Controller method depend>>
+	<<Class Controller method error>>
+	<<Class Controller method label>>
+	<<Class Controller method mock>>
+	<<Class Controller method new>>
+	<<Class Controller method replay>>
+	<<Class Controller method returns>>
+	<<Class Controller method times>>
+	<<Class Controller method verify>>
+	
+	-- Protected methods
+	<<Class Controller method actions>>
+	<<Class Controller method add_action>>
+	<<Class Controller method assert_no_dependency_cycles>>
+	<<Class Controller method close_actions>>
+	<<Class Controller method get_last_action>>
+	<<Class Controller method lookup>>
+	<<Class Controller method make_callable>>
+	<<Class Controller method new>>
+	<<Class Controller method replay_action>>
+	<<Class Controller method update_dependencies>>

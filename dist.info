@@ -1,0 +1,14 @@
+--- This file is part of LuaDist project
+
+name = "lemock"
+version = "0.6"
+
+desc = "Mock creation module intended for use together with a unit test framework such as lunit or lunity."
+author = "Tommy Petterson"
+license = "MIT"
+url = "http://lemock.luaforge.net"
+maintainer = "Peter Drahos"
+
+depends = {
+	"lua ~> 5.1"
+}

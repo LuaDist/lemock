@@ -1,0 +1,182 @@
+Lua Easy Mock -- LeMock
+Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+See terms in file COPYRIGHT, or at http://lemock.luaforge.net
+@
+
+Convertng Objects to Strings
+############################
+
+When replay or verification fails there should be an explanation that shows
+what the problem is. One way is to list the expected actions. Therefore
+each Action type has a [[tostring]] method. The output tries to mimic what
+the missing expression might have looked like in the failing code.
+
+
+Helper functions qtostring and sfmt
+===================================
+
+[[sfmt]] is to make the code less verbose. [[qtostring]] is a wrapper for
+[[tostring]] which adds quoting of string values to make error messages
+easier to understand.
+
+<<Helper function qtostring and sfmt>>=
+	sfmt = string.format
+	function qtostring (v)
+		if type(v) == 'string' then
+			return sfmt( '%q', v )
+		else
+			return tostring( v )
+		end
+	end
+@
+
+Action Newindex
+================
+
+<<Unit test for class Action.newindex method tostring>>=
+	function newindex_tostring_test ()
+		local a = Action.newindex:new( {}, 'key', 7 )
+		assert_equal( 'newindex key = 7', a:tostring() )
+		a = Action.newindex:new( {}, true, '7' )
+		assert_equal( 'newindex true = "7"', a:tostring() )
+	end
+
+<<Class Action.newindex method tostring>>=
+	function Action.newindex:tostring ()
+		return sfmt( "newindex %s = %s"
+		             , tostring(self.key)
+		             , qtostring(self.val)
+		       )
+	end
+@
+
+Action Index
+============
+
+<<Unit test for class Action.index method tostring>>=
+	function index_tostring_test ()
+		local a = Action.index:new( {}, true )
+		assert_equal( 'index true', a:tostring() )
+		a:set_returnvalue('"false"')
+		assert_equal( 'index true => "\\"false\\""', a:tostring() )
+	end
+	function callable_index_tostring_test ()
+		local a = Action.index:new( {}, 'f' )
+		a.is_callable = true
+		assert_equal( 'index f()', a:tostring() )
+	end
+
+<<Class Action.index method tostring>>=
+	function Action.index:tostring ()
+		local key = 'index '..tostring( self.key )
+		if self.has_returnvalue then
+			return sfmt( "index %s => %s"
+			             , tostring( self.key )
+			             , qtostring( self.returnvalue )
+			       )
+		elseif self.is_callable then
+			return sfmt( "index %s()"
+			             , tostring( self.key )
+			       )
+		else
+			return sfmt( "index %s"
+			             , tostring( self.key )
+			       )
+		end
+	end
+@
+
+Action Call
+===========
+
+<<Unit test for class Action.call method tostring>>=
+	function call_tostring_test ()
+		local a = Action.call:new( {}, 'foo', 1, '"', 3 )
+		assert_equal( 'call foo(1,"\\"",3)', a:tostring() )
+		a:set_returnvalue( 'false', false )
+		assert_equal( 'call foo(1,"\\"",3) => "false",false', a:tostring() )
+	end
+
+<<Class Action.call method tostring>>=
+	function Action.call:tostring ()
+		if self.has_returnvalue then
+			return sfmt( "call %s(%s) => %s"
+			             , tostring(self.key)
+			             , self.argv:tostring()
+			             , self.returnvalue:tostring()
+			       )
+		else
+			return sfmt( "call %s(%s)"
+			             , tostring(self.key)
+			             , self.argv:tostring()
+			       )
+		end
+	end
+@
+
+Action Selfcall
+===============
+
+<<Unit test for class Action.selfcall method tostring>>=
+	function selfcall_tostring_test ()
+		local a = Action.selfcall:new( {}, 1, '"', nil )
+		assert_equal( 'selfcall (1,"\\"",nil)', a:tostring() )
+		a:set_returnvalue( 'false', false )
+		assert_equal( 'selfcall (1,"\\"",nil) => "false",false', a:tostring() )
+	end
+
+<<Class Action.selfcall method tostring>>=
+	function Action.selfcall:tostring ()
+		if self.has_returnvalue then
+			return sfmt( "selfcall (%s) => %s"
+			             , self.argv:tostring()
+			             , self.returnvalue:tostring()
+			       )
+		else
+			return sfmt( "selfcall (%s)"
+			             , self.argv:tostring()
+			       )
+		end
+	end
+@
+
+Class Argv
+==========
+
+Argument lists are converted without surrounding parentheses, because they
+can be used as multiple return values as well as call arguments. When they
+are used as call arguments, the invoker will have to add the parentheses.
+
+<<Unit test for class Argv method tostring>>=
+	function tostring_test ()
+		assert_equal( '',              Argv:new()              :tostring() )
+		assert_equal( '""',            Argv:new('')            :tostring() )
+		assert_equal( 'nil,nil',       Argv:new(nil,nil)       :tostring() )
+		assert_equal( '"false",false', Argv:new('false',false) :tostring() )
+		assert_equal( '1,2,3',         Argv:new(1,2,3)         :tostring() )
+		assert_equal( '1,ANYARG,3',    Argv:new(1,Argv.ANYARG,3):tostring() )
+		assert_equal( 'ANYARGS',       Argv:new(Argv.ANYARGS)  :tostring() )
+		assert_equal( '7,0,ANYARGS',   Argv:new(7,0,Argv.ANYARGS):tostring() )
+	end
+
+<<Class Argv method tostring>>=
+	function Argv:tostring ()
+		local res = {}
+		local function w (v)
+			res[#res+1] = qtostring( v )
+		end
+		local av, ac = self.v, self.len
+		for i = 1, ac do
+			if av[i] == Argv.ANYARG then
+				res[#res+1] = 'ANYARG'
+			elseif av[i] == Argv.ANYARGS then
+				res[#res+1] = 'ANYARGS'
+			else
+				w( av[i] )
+			end
+			if i < ac then
+				res[#res+1] = ',' -- can not use qtostring in w()
+			end
+		end
+		return table.concat( res )
+	end

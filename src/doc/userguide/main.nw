@@ -1,0 +1,23 @@
+Lua Easy Mock -- LeMock
+Copyright (C) 2009 Tommy Pettersson <ptp@lysator.liu.se>
+See terms in file COPYRIGHT, or at http://lemock.luaforge.net
+@
+
+<<userguide.t2t>>=
+LeMock User Guide
+v 0.6
+2009-05-30
+
+%!postproc(html): – &ndash;
+%!postproc(tex):  – --
+
+<<Userguide Chapter Introduction>>
+<<Userguide Chapter The Mock Object>>
+<<Userguide Chapter The Controller>>
+<<Userguide Chapter Tricks>>
+@
+
+TODO
+	method reference with syntax
+	errors and their messages
+	limitations & future work
